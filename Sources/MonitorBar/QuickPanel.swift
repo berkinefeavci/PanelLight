@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 
 struct QuickPanel: View {
@@ -156,7 +157,7 @@ struct QuickPanel: View {
 
             Divider().padding(.top, 8)
 
-            Button { showSettings = true } label: {
+            Button { model.readLoginItem(); showSettings = true } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "gearshape")
                         .font(.system(size: 11))
@@ -288,6 +289,20 @@ struct QuickPanel: View {
                         get: { model.launchAtLogin },
                         set: { model.setLaunchAtLogin($0) }
                     ))
+                    if model.loginItemNeedsApproval {
+                        Text("Allow PanelLight under Login Items in System Settings so it can open at login.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.blue)
+                    } else if let error = model.loginItemError {
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Divider().padding(.vertical, 3)
                 }
 
@@ -343,7 +358,15 @@ struct QuickPanel: View {
                     Link("Report a bug", destination: URL(string: "https://github.com/berkinefeavci/PanelLight/issues/new?template=bug_report.yml")!)
                     Link("Suggest a feature", destination: URL(string: "https://github.com/berkinefeavci/PanelLight/issues/new?template=feature_request.yml")!)
                 }
-                Link("Check for updates", destination: URL(string: "https://github.com/berkinefeavci/PanelLight/releases/latest")!)
+                HStack {
+                    Link("Check for updates", destination: URL(string: "https://github.com/berkinefeavci/PanelLight/releases/latest")!)
+                    Spacer()
+                    if let version = AppInfo.versionText {
+                        Text(version)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Text("Links open in your browser. No diagnostic data is sent automatically.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)

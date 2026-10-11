@@ -17,6 +17,8 @@ import ServiceManagement
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var launchAtLogin = false
+    @Published private(set) var loginItemNeedsApproval = false
+    @Published private(set) var loginItemError: String?
 
     private let discovery = DisplayDiscovery()
     private var brightnessQueues: [UInt32: LatestWriteQueue] = [:]
@@ -59,7 +61,7 @@ import ServiceManagement
     func start() {
         LegacySettings.removeObsoleteKeys()
         BuiltInContrastController.recoverAfterCrash()
-        if #available(macOS 13, *) { launchAtLogin = SMAppService.mainApp.status == .enabled }
+        readLoginItem()
         discovery.onChange = { [weak self] displays, force in
             MainActor.assumeIsolated { self?.updateDisplays(displays, force: force) }
         }
@@ -87,16 +89,33 @@ import ServiceManagement
 
     @available(macOS 13, *)
     func setLaunchAtLogin(_ enabled: Bool) {
+        var changeFailed = false
         do {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-            errorMessage = nil
         } catch {
-            errorMessage = String(localized: "Open at login could not be changed")
+            changeFailed = true
         }
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        readLoginItem(wanted: changeFailed ? enabled : nil)
     }
 
-    func refresh() { updateDisplays(DisplayDiscovery.externalDisplays(), force: true) }
+    // Reads the real state again: the user can change it in System Settings > Login Items at any time.
+    // `wanted` is set after a failed register/unregister; the error only counts if the state is not what was asked for.
+    func readLoginItem(wanted: Bool? = nil) {
+        guard #available(macOS 13, *) else { return }
+        let status = SMAppService.mainApp.status
+        let enabled = status == .enabled
+        let needsApproval = status == .requiresApproval
+        let failed = wanted.map { $0 != enabled && !needsApproval } ?? false
+        let error = failed ? String(localized: "Open at login could not be changed") : nil
+        if launchAtLogin != enabled { launchAtLogin = enabled }
+        if loginItemNeedsApproval != needsApproval { loginItemNeedsApproval = needsApproval }
+        if loginItemError != error { loginItemError = error }
+    }
+
+    func refresh() {
+        readLoginItem()
+        updateDisplays(DisplayDiscovery.externalDisplays(), force: true)
+    }
 
     func setLinkBrightness(_ enabled: Bool) {
         linkBrightness = enabled

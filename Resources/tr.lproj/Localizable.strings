@@ -49,3 +49,7 @@
 "Monitor inputs" = "Monitör girişleri";
 "Night Shift" = "Night Shift";
 "Hiding a control only removes it from the panel. The light or setting stays as it is." = "Gizlemek yalnızca satırı panelden kaldırır. Işık ya da ayar olduğu gibi kalır.";
+"Allow PanelLight under Login Items in System Settings so it can open at login." = "PanelLight'ın girişte açılması için Sistem Ayarları'nda Giriş Öğeleri altında izin ver.";
+"Open Login Items…" = "Giriş Öğelerini aç…";
+"Version %@ (%@)" = "Sürüm %@ (%@)";
+"Version %@" = "Sürüm %@";
