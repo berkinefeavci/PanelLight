@@ -26,6 +26,7 @@ enum IssueSource: Equatable {
 
     private let discovery = DisplayDiscovery()
     private var brightnessQueues: [UInt32: LatestWriteQueue] = [:]
+    private var contrastQueues: [UInt32: LatestWriteQueue] = [:]
     private let contrastScheduler = WriteScheduler()
     private let builtInScheduler = WriteScheduler()
     private let keyboardScheduler = WriteScheduler()
@@ -43,7 +44,8 @@ enum IssueSource: Equatable {
     // A probe is running; the same display list does not start another one.
     private var isProbing = false
     private var nightShiftEnabledBeforeOverride: Bool?
-    private var builtInPollTimer: Timer?
+    private var pollTimer: Timer?
+    private var isPanelVisible = false
     private var lastMirroredBuiltIn: Double?
 
     // Rows stay usable while a refresh re-reads the monitors; only the first probe has nothing to show.
@@ -75,20 +77,18 @@ enum IssueSource: Equatable {
         discovery.start()
         pollKeyboardBrightness()
         pollNightShift()
-        builtInPollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.pollBuiltInBrightness() }
-        }
+        updatePolling()
     }
 
     func stop() {
-        cancelBrightnessWrites()
+        cancelPendingWrites()
         contrastScheduler.cancel()
         builtInScheduler.cancel()
         keyboardScheduler.cancel()
         builtInWritePending = false
         keyboardWritePending = false
-        builtInPollTimer?.invalidate()
-        builtInPollTimer = nil
+        pollTimer?.invalidate()
+        pollTimer = nil
         builtInContrast.restore()
         dimmer.removeAll()
         discovery.stop()
@@ -142,6 +142,7 @@ enum IssueSource: Equatable {
         UserDefaults.standard.set(enabled, forKey: "linkBrightness")
         lastMirroredBuiltIn = builtInBrightnessValue
         syncExternalToBuiltIn()
+        updatePolling()
     }
 
     func setBrightness(_ value: Double, of id: UInt32) {
@@ -280,7 +281,13 @@ enum IssueSource: Equatable {
                 !self.builtInContrast.apply(value, to: $0.id)
             } ?? false
             for (display, raw) in targets {
-                self.send(display: display, vcp: 0x12, raw: raw, token: token, request: request)
+                // One write at a time per monitor; slider moves made meanwhile collapse into the newest.
+                let queue = self.contrastQueues[display.id] ?? LatestWriteQueue()
+                self.contrastQueues[display.id] = queue
+                queue.submit { [weak self] finish in
+                    guard let self else { finish(); return }
+                    self.send(display: display, vcp: 0x12, raw: raw, token: token, request: request, finished: finish)
+                }
             }
         }
     }
@@ -293,7 +300,7 @@ enum IssueSource: Equatable {
             return
         }
         generation += 1
-        cancelBrightnessWrites()
+        cancelPendingWrites()
         contrastScheduler.cancel()
         builtInScheduler.cancel()
         builtInWritePending = false
@@ -312,6 +319,7 @@ enum IssueSource: Equatable {
             probes = []
             softwareDimmed = []
             isProbing = false
+            updatePolling()
             return
         }
         probe(newDisplays, token: generation)
@@ -350,6 +358,7 @@ enum IssueSource: Equatable {
                 self.clearError(from: .display)
                 self.syncContrast()
                 self.syncExternalToBuiltIn()
+                self.updatePolling()
             }
         }
     }
@@ -358,8 +367,9 @@ enum IssueSource: Equatable {
         HardwareLevels(current: UInt16((dimmer.level(for: id) * 10).rounded()), maximum: 1000)
     }
 
-    private func cancelBrightnessWrites() {
+    private func cancelPendingWrites() {
         brightnessQueues.values.forEach { $0.cancel() }
+        contrastQueues.values.forEach { $0.cancel() }
     }
 
     private func send(display: DisplayIdentity, vcp: UInt8, raw: UInt16, token: Int,
@@ -412,9 +422,41 @@ enum IssueSource: Equatable {
         }
     }
 
+    var isPolling: Bool { pollTimer != nil }
+
+    // The panel tells the model when it is on screen. Closed, nothing shown needs fresh readings, so the 1 s timer
+    // only runs for Link, which follows the Mac's brightness keys onto the monitors.
+    func setPanelVisible(_ visible: Bool) {
+        guard visible != isPanelVisible else { return }
+        isPanelVisible = visible
+        if visible { poll() }
+        updatePolling()
+    }
+
+    private func updatePolling() {
+        let needed = pollingNeeded(panelVisible: isPanelVisible, linkOn: linkBrightness, hasBuiltIn: builtInDisplay != nil,
+                                   hasLinkedDisplay: probes.contains { $0.brightness != nil })
+        if needed && pollTimer == nil {
+            let timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.poll() }
+            }
+            timer.tolerance = 0.3
+            pollTimer = timer
+        } else if !needed, let pollTimer {
+            pollTimer.invalidate()
+            self.pollTimer = nil
+        }
+    }
+
+    private func poll() {
+        if isPanelVisible {
+            pollKeyboardBrightness()
+            pollNightShift()
+        }
+        pollBuiltInBrightness()
+    }
+
     private func pollBuiltInBrightness() {
-        pollKeyboardBrightness()
-        pollNightShift()
         guard !builtInWritePending else { return }
         guard let display = builtInDisplay else { return }
         var raw: Float = 0
@@ -422,7 +464,7 @@ enum IssueSource: Equatable {
         receivePolledBuiltInBrightness(Double(raw) * 100)
     }
 
-    // The 1 s poll runs while the panel is closed too. Publishing an unchanged reading still fires
+    // The poll can run while the panel is closed (Link). Publishing an unchanged reading still fires
     // objectWillChange and re-lays out the hidden panel every tick, so only real changes are published.
     func receivePolledBuiltInBrightness(_ value: Double) {
         if builtInBrightnessValue != value { builtInBrightnessValue = value }
@@ -459,4 +501,10 @@ enum IssueSource: Equatable {
     func receivePolledNightShift(_ warm: Bool?) {
         if nightShiftWarm != warm { nightShiftWarm = warm }
     }
+}
+
+// Link follows the built-in display onto every external screen (monitors and software-dimmed ones alike),
+// so it needs readings while the panel is closed. Nothing else does.
+func pollingNeeded(panelVisible: Bool, linkOn: Bool, hasBuiltIn: Bool, hasLinkedDisplay: Bool) -> Bool {
+    panelVisible || (linkOn && hasBuiltIn && hasLinkedDisplay)
 }

@@ -109,6 +109,27 @@ final class MonitorModelTests: XCTestCase {
         watcher.cancel()
     }
 
+    func testPollingRunsOnlyWhereSomethingNeedsIt() {
+        XCTAssertFalse(pollingNeeded(panelVisible: false, linkOn: false, hasBuiltIn: true, hasLinkedDisplay: true),
+                       "closed panel, Link off: no timer at all")
+        XCTAssertTrue(pollingNeeded(panelVisible: true, linkOn: false, hasBuiltIn: false, hasLinkedDisplay: false))
+        XCTAssertTrue(pollingNeeded(panelVisible: false, linkOn: true, hasBuiltIn: true, hasLinkedDisplay: true),
+                      "Link follows the brightness keys while the panel is closed")
+        XCTAssertFalse(pollingNeeded(panelVisible: false, linkOn: true, hasBuiltIn: false, hasLinkedDisplay: true))
+        XCTAssertFalse(pollingNeeded(panelVisible: false, linkOn: true, hasBuiltIn: true, hasLinkedDisplay: false))
+    }
+
+    @MainActor func testPollTimerRunsOnlyWhilePanelIsOpen() {
+        let model = MonitorModel()
+        XCTAssertFalse(model.isPolling)
+        model.setPanelVisible(true)
+        XCTAssertTrue(model.isPolling)
+        model.setPanelVisible(true)
+        XCTAssertTrue(model.isPolling)
+        model.setPanelVisible(false)
+        XCTAssertFalse(model.isPolling, "closed panel with Link off needs no timer")
+    }
+
     func testWriteRequiresMatchingReadback() {
         XCTAssertEqual(writeOutcome(requested: 52, readback: HardwareLevels(current: 52, maximum: 100)), .verified)
         XCTAssertEqual(writeOutcome(requested: 52, readback: HardwareLevels(current: 58, maximum: 100)), .mismatch)

@@ -36,6 +36,7 @@ if CommandLine.arguments.contains("--probe") {
     }
     let model = MonitorModel()
     model.start()
+    model.setPanelVisible(true)
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 430),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
     window.title = "PanelLight Preview"

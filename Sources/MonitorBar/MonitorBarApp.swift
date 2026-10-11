@@ -60,6 +60,7 @@ private final class MonitorPanel: NSPanel {
         guard let button = statusItem.button else { return }
         isOpen = true
         transition += 1
+        model.setPanelVisible(true)
         model.refresh()
         panel.contentViewController?.view.layoutSubtreeIfNeeded()
         updatePanelSize(panel.contentViewController?.view.fittingSize ?? NSSize(width: 300, height: 500))
@@ -92,6 +93,7 @@ private final class MonitorPanel: NSPanel {
         guard isOpen else { return }
         isOpen = false
         transition += 1
+        model.setPanelVisible(false)
         let current = transition
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.12
