@@ -7,6 +7,8 @@ void MBMakeGetPacket(uint8_t code, uint8_t output[4]);
 void MBMakeSetPacket(uint8_t code, uint16_t value, uint8_t output[6]);
 bool MBParseReply(const uint8_t *reply, size_t count, uint8_t code, uint16_t *current, uint16_t *maximum);
 
+// The DDC functions below share static service state and are not thread-safe: call them from one serial queue
+// (DDCClient does). Every reply is length-, header- and checksum-checked before a value is returned.
 void MBRescan(void);
 int32_t MBServiceCount(void);
 bool MBServiceIdentity(int32_t index, uint32_t *vendor, uint32_t *product, uint32_t *serial);
