@@ -65,8 +65,6 @@ dist/PanelLight.app/Contents/MacOS/MonitorBar --preview   # opens the panel in a
 
 The DDC approach was informed by [traderGK/OpenDisplay](https://github.com/traderGK/OpenDisplay) (MIT), [AppleSiliconDDC](https://github.com/waydabber/AppleSiliconDDC) (MIT), [ScreenControl](https://github.com/pushbrands/ScreenControl) (MIT), and [aquitaine/OpenDisplay](https://github.com/aquitaine/OpenDisplay) (GPL-3.0-or-later). PanelLight is a separate source tree and contains no GPL source or assets.
 
-Keyboard auto-brightness behavior was checked against [Apple's keyboard settings guide](https://support.apple.com/guide/mac-help/mchlp2265/mac) and [macos-keyboard-backlight](https://github.com/noluyorAbi/macos-keyboard-backlight) (MIT). No code was copied.
-
 Night Shift behavior was compared with [Luma](https://github.com/heymykro/luma) (MIT). No Luma code was copied.
 
 ## License

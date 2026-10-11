@@ -1,5 +1,7 @@
 # MonitorBar Design
 
+> **Historical.** First-prototype notes from 2026-10-02, kept for the reasoning behind the DDC design. They are not the shipped product: PanelLight 0.2.0 also has software dimming, open at login, the built-in display, keyboard backlight and Night Shift, and it supports Apple Silicon only.
+
 > 2026-10-02 · Codex. Berkin approved the Hızlı Panel visual and the technical direction in chat.
 
 ## Purpose

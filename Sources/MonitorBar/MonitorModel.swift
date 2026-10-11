@@ -57,6 +57,7 @@ import ServiceManagement
     func canChangeBrightness(of id: UInt32) -> Bool { brightness(of: id) != nil }
 
     func start() {
+        LegacySettings.removeObsoleteKeys()
         BuiltInContrastController.recoverAfterCrash()
         if #available(macOS 13, *) { launchAtLogin = SMAppService.mainApp.status == .enabled }
         discovery.onChange = { [weak self] displays, force in

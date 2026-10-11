@@ -1,5 +1,7 @@
 # MonitorBar Implementation Plan
 
+> **Historical.** First-prototype notes from 2026-10-02, kept for the reasoning behind the DDC design. They are not the shipped product: PanelLight 0.2.0 also has software dimming, open at login, the built-in display, keyboard backlight and Night Shift, and it supports Apple Silicon only.
+
 > **For agentic workers:** Implement natively, task by task. No subagents are requested. Use test-first checks for logic; verify the UI in a live macOS window.
 
 **Goal:** Build the approved Hızlı Panel as a macOS menu bar app that controls external monitors through real DDC/CI hardware commands.
