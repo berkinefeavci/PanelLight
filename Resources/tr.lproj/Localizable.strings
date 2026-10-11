@@ -53,3 +53,5 @@
 "Open Login Items…" = "Giriş Öğelerini aç…";
 "Version %@ (%@)" = "Sürüm %@ (%@)";
 "Version %@" = "Sürüm %@";
+"Checking the connection…" = "Bağlantı denetleniyor…";
+"No DDC/CI connection found, dimmed in software. Use a USB-C or DisplayPort connection; some docks and adapters do not pass DDC/CI." = "DDC/CI bağlantısı bulunamadı, yazılımla karartılıyor. USB-C ya da DisplayPort bağlantısı kullan; bazı dock ve adaptörler DDC/CI geçirmez.";

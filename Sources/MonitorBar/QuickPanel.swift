@@ -100,14 +100,14 @@ struct QuickPanel: View {
                     if showKeyboard && model.canChangeKeyboardBrightness {
                         sliderRow(title: String(localized: "Keyboard backlight"), icon: "keyboard",
                                   value: { model.keyboardBrightnessValue },
-                                  enabled: true,
+                                  isBrightness: false, enabled: true,
                                   tint: barColor(keyboardBarColor)) { model.setKeyboardBrightness($0) }
                     }
                     if showContrast && model.canChangeContrast {
                         sliderRow(title: String(localized: "Contrast"), icon: "circle.lefthalf.filled",
                                   low: "circle.lefthalf.filled", high: "circle.righthalf.filled",
                                   value: { model.contrastValue },
-                                  enabled: true,
+                                  isBrightness: false, enabled: true,
                                   tint: barColor(contrastBarColor)) { model.setContrast($0) }
                     }
                     if showNightShift, let nightShiftWarm = model.nightShiftWarm {
@@ -184,7 +184,7 @@ struct QuickPanel: View {
 
     private func sliderRow(title: String, icon: String, badge: String? = nil,
                            low: String = "sun.min.fill", high: String = "sun.max.fill",
-                           value: @escaping () -> Double?, enabled: Bool, tint: Color,
+                           value: @escaping () -> Double?, isBrightness: Bool = true, enabled: Bool, tint: Color,
                            set: @escaping (Double) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
@@ -214,7 +214,8 @@ struct QuickPanel: View {
                     .font(.system(size: 9))
                     .frame(width: 16)
                 ColorSlider(value: Binding(get: { value() ?? 0 }, set: set), tint: tint,
-                            enabled: enabled && value() != nil, label: String(localized: "\(title) brightness"))
+                            enabled: enabled && value() != nil,
+                            label: isBrightness ? String(localized: "\(title) brightness") : title)
                     .frame(maxWidth: .infinity)
                 Image(systemName: high)
                     .font(.system(size: 13))
@@ -228,6 +229,21 @@ struct QuickPanel: View {
         guard display.isVirtual else { return display.name }
         if display.name.localizedCaseInsensitiveContains("Sidecar") { return "iPad" }
         return display.name.replacingOccurrences(of: " (AirPlay)", with: "")
+    }
+
+    // The first probe has not finished for a display with no entry in `probes`: do not claim DDC/CI yet.
+    private func connectionNote(_ display: DisplayIdentity) -> String {
+        if display.isVirtual { return String(localized: "Dimmed in software; this display has no hardware brightness.") }
+        guard let probe = model.probes.first(where: { $0.display.id == display.id }) else {
+            return String(localized: "Checking the connection…")
+        }
+        guard model.softwareDimmed.contains(display.id) else { return String(localized: "Hardware brightness over DDC/CI.") }
+        switch probe.issue {
+        case .noConnection:
+            return String(localized: "No DDC/CI connection found, dimmed in software. Use a USB-C or DisplayPort connection; some docks and adapters do not pass DDC/CI.")
+        case .noAnswer, nil:
+            return String(localized: "No DDC/CI response, dimmed in software. Check the monitor's DDC/CI setting and cable.")
+        }
     }
 
     private func icon(_ display: DisplayIdentity) -> String {
@@ -342,10 +358,7 @@ struct QuickPanel: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Label(title(item), systemImage: icon(item))
                             .lineLimit(1)
-                        Text(model.softwareDimmed.contains(item.id) ?
-                                (item.isVirtual ? String(localized: "Dimmed in software; this display has no hardware brightness.") :
-                                    String(localized: "No DDC/CI response, dimmed in software. Check the monitor's DDC/CI setting and cable.")) :
-                                String(localized: "Hardware brightness over DDC/CI."))
+                        Text(connectionNote(item))
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
