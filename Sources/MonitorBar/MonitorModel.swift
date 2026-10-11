@@ -3,6 +3,11 @@ import Combine
 import DDCBridge
 import ServiceManagement
 
+// Where the message on screen came from, so it goes away when that condition recovers.
+enum IssueSource: Equatable {
+    case keyboardUnavailable, builtInUnavailable, display, other
+}
+
 @MainActor final class MonitorModel: ObservableObject {
     @Published private(set) var displays: [DisplayIdentity] = []
     @Published private(set) var probes: [DDCProbe] = []
@@ -35,6 +40,7 @@ import ServiceManagement
     private var keyboardWritePending = false
     private var builtInWritePending = false
     private var builtInContrastFailed = false
+    private var errorSource: IssueSource?
     private var nightShiftEnabledBeforeOverride: Bool?
     private var builtInPollTimer: Timer?
     private var lastMirroredBuiltIn: Double?
@@ -113,8 +119,21 @@ import ServiceManagement
     }
 
     func refresh() {
+        clearError()
         readLoginItem()
         updateDisplays(DisplayDiscovery.externalDisplays(), force: true)
+    }
+
+    // The panel shows one message at a time; every change below publishes only when the text really changes.
+    func report(_ message: String, source: IssueSource = .other) {
+        if errorMessage != message { errorMessage = message }
+        errorSource = source
+    }
+
+    func clearError(from source: IssueSource? = nil) {
+        guard errorMessage != nil, source == nil || errorSource == source else { return }
+        errorMessage = nil
+        errorSource = nil
     }
 
     func setLinkBrightness(_ enabled: Bool) {
@@ -155,7 +174,7 @@ import ServiceManagement
         guard keyboardBrightnessValue != nil else { return }
         let requested = min(100, max(0, value))
         keyboardBrightnessValue = requested
-        errorMessage = nil
+        clearError()
         keyboardRequest += 1
         let request = keyboardRequest
         keyboardWritePending = true
@@ -166,11 +185,11 @@ import ServiceManagement
             if MBWriteKeyboardBrightness(target), MBReadKeyboardBrightness(&readback) {
                 self.keyboardBrightnessValue = Double(readback) * 100
                 if abs(Double(readback) - Double(target)) > 0.02 {
-                    self.errorMessage = String(localized: "Keyboard backlight change was not confirmed")
+                    self.report(String(localized: "Keyboard backlight change was not confirmed"))
                 }
             } else {
                 self.keyboardBrightnessValue = nil
-                self.errorMessage = String(localized: "Keyboard backlight is unavailable")
+                self.report(String(localized: "Keyboard backlight is unavailable"), source: .keyboardUnavailable)
             }
             self.keyboardWritePending = false
         }
@@ -184,9 +203,9 @@ import ServiceManagement
         if warm { nightShiftEnabledBeforeOverride = enabled }
         let enabledWhenOff = nightShiftEnabledBeforeOverride ?? (mode != 0 && enabled)
         if !MBSetNightShiftWarm(warm, enabledWhenOff) {
-            errorMessage = String(localized: "Night Shift change was not confirmed")
+            report(String(localized: "Night Shift change was not confirmed"))
         } else {
-            errorMessage = nil
+            clearError()
             if !warm { nightShiftEnabledBeforeOverride = nil }
         }
         pollNightShift()
@@ -203,7 +222,7 @@ import ServiceManagement
               let raw = rawLevel(percent: value, maximum: levels.maximum) else { return }
         // Show the requested level right away; the monitor's readback replaces it once the write lands.
         replaceLevels(HardwareLevels(current: raw, maximum: levels.maximum), vcp: 0x10, displayID: id)
-        errorMessage = nil
+        clearError()
         let request = (brightnessRequests[id] ?? 0) + 1
         brightnessRequests[id] = request
         let token = generation
@@ -231,11 +250,11 @@ import ServiceManagement
                 self.builtInBrightnessValue = Double(readback) * 100
                 self.lastMirroredBuiltIn = Double(readback) * 100
                 if abs(Double(readback) - Double(target)) > 0.02 {
-                    self.errorMessage = String(localized: "Built-in display change was not confirmed")
+                    self.report(String(localized: "Built-in display change was not confirmed"))
                 }
             } else {
                 self.builtInBrightnessValue = nil
-                self.errorMessage = String(localized: "Built-in display brightness is unavailable")
+                self.report(String(localized: "Built-in display brightness is unavailable"), source: .builtInUnavailable)
             }
             self.builtInWritePending = false
         }
@@ -250,7 +269,7 @@ import ServiceManagement
         }
         guard !targets.isEmpty else { return }
         contrastValue = value
-        errorMessage = nil
+        clearError()
         contrastRequest += 1
         let token = generation
         let request = contrastRequest
@@ -324,6 +343,7 @@ import ServiceManagement
                 self.softwareDimmed = dimmed
                 self.dimmer.keep(only: dimmed)
                 self.isLoading = false
+                self.clearError(from: .display)
                 self.syncContrast()
                 self.syncExternalToBuiltIn()
             }
@@ -350,13 +370,16 @@ import ServiceManagement
                 switch writeOutcome(requested: raw, readback: readback) {
                 case .verified:
                     self.replaceLevels(readback, vcp: vcp, displayID: display.id)
-                    self.errorMessage = vcp == 0x12 && self.builtInContrastFailed ?
-                        String(localized: "Built-in display contrast could not be applied") : nil
+                    if vcp == 0x12 && self.builtInContrastFailed {
+                        self.report(String(localized: "Built-in display contrast could not be applied"))
+                    } else {
+                        self.clearError()
+                    }
                 case .mismatch:
                     self.replaceLevels(readback, vcp: vcp, displayID: display.id)
-                    self.errorMessage = String(localized: "\(display.name) reported a different value")
+                    self.report(String(localized: "\(display.name) reported a different value"), source: .display)
                 case .unreadable:
-                    self.errorMessage = String(localized: "\(display.name) did not confirm the change")
+                    self.report(String(localized: "\(display.name) did not confirm the change"), source: .display)
                     self.probe(self.displays, token: token)
                 }
             }
@@ -398,6 +421,7 @@ import ServiceManagement
     // objectWillChange and re-lays out the hidden panel every tick, so only real changes are published.
     func receivePolledBuiltInBrightness(_ value: Double) {
         if builtInBrightnessValue != value { builtInBrightnessValue = value }
+        clearError(from: .builtInUnavailable)
         guard let previous = lastMirroredBuiltIn else {
             lastMirroredBuiltIn = value
             return
@@ -418,6 +442,7 @@ import ServiceManagement
 
     func receivePolledKeyboardBrightness(_ value: Double?) {
         if keyboardBrightnessValue != value { keyboardBrightnessValue = value }
+        if value != nil { clearError(from: .keyboardUnavailable) }
     }
 
     private func pollNightShift() {

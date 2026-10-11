@@ -71,6 +71,44 @@ final class MonitorModelTests: XCTestCase {
         watcher.cancel()
     }
 
+    @MainActor func testMessageGoesAwayWhenItsConditionRecovers() {
+        let model = MonitorModel()
+        model.report("Keyboard backlight is unavailable", source: .keyboardUnavailable)
+        model.receivePolledKeyboardBrightness(nil)
+        model.receivePolledBuiltInBrightness(50)
+        XCTAssertEqual(model.errorMessage, "Keyboard backlight is unavailable", "still missing, and an unrelated recovery")
+        model.receivePolledKeyboardBrightness(40)
+        XCTAssertNil(model.errorMessage)
+
+        model.report("Built-in display brightness is unavailable", source: .builtInUnavailable)
+        model.receivePolledKeyboardBrightness(41)
+        XCTAssertNotNil(model.errorMessage)
+        model.receivePolledBuiltInBrightness(51)
+        XCTAssertNil(model.errorMessage)
+
+        model.report("Night Shift change was not confirmed")
+        model.receivePolledKeyboardBrightness(42)
+        model.receivePolledBuiltInBrightness(52)
+        XCTAssertNotNil(model.errorMessage, "a failed change stays until the next action or refresh")
+        model.clearError()
+        XCTAssertNil(model.errorMessage)
+    }
+
+    @MainActor func testClearingNothingDoesNotRedrawPanel() {
+        let model = MonitorModel()
+        var changes = 0
+        let watcher = model.objectWillChange.sink { changes += 1 }
+        model.clearError()
+        model.clearError(from: .display)
+        XCTAssertEqual(changes, 0)
+        model.report("x", source: .display)
+        model.report("x", source: .display)
+        XCTAssertEqual(changes, 1)
+        model.clearError(from: .keyboardUnavailable)
+        XCTAssertEqual(model.errorMessage, "x")
+        watcher.cancel()
+    }
+
     func testWriteRequiresMatchingReadback() {
         XCTAssertEqual(writeOutcome(requested: 52, readback: HardwareLevels(current: 52, maximum: 100)), .verified)
         XCTAssertEqual(writeOutcome(requested: 52, readback: HardwareLevels(current: 58, maximum: 100)), .mismatch)
