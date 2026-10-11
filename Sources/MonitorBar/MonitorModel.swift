@@ -371,8 +371,13 @@ import ServiceManagement
         guard let display = builtInDisplay else { return }
         var raw: Float = 0
         guard MBReadBuiltInBrightness(display.id, &raw) else { return }
-        let value = Double(raw) * 100
-        builtInBrightnessValue = value
+        receivePolledBuiltInBrightness(Double(raw) * 100)
+    }
+
+    // The 1 s poll runs while the panel is closed too. Publishing an unchanged reading still fires
+    // objectWillChange and re-lays out the hidden panel every tick, so only real changes are published.
+    func receivePolledBuiltInBrightness(_ value: Double) {
+        if builtInBrightnessValue != value { builtInBrightnessValue = value }
         guard let previous = lastMirroredBuiltIn else {
             lastMirroredBuiltIn = value
             return
@@ -388,12 +393,20 @@ import ServiceManagement
     private func pollKeyboardBrightness() {
         guard !keyboardWritePending else { return }
         var raw: Float = 0
-        keyboardBrightnessValue = MBReadKeyboardBrightness(&raw) ? Double(raw) * 100 : nil
+        receivePolledKeyboardBrightness(MBReadKeyboardBrightness(&raw) ? Double(raw) * 100 : nil)
+    }
+
+    func receivePolledKeyboardBrightness(_ value: Double?) {
+        if keyboardBrightnessValue != value { keyboardBrightnessValue = value }
     }
 
     private func pollNightShift() {
         var active = false, enabled = false
         var mode: Int32 = 0
-        nightShiftWarm = MBReadNightShift(&active, &enabled, &mode) ? active && enabled : nil
+        receivePolledNightShift(MBReadNightShift(&active, &enabled, &mode) ? active && enabled : nil)
+    }
+
+    func receivePolledNightShift(_ warm: Bool?) {
+        if nightShiftWarm != warm { nightShiftWarm = warm }
     }
 }

@@ -49,6 +49,28 @@ final class MonitorModelTests: XCTestCase {
         }
     }
 
+    @MainActor func testUnchangedPollReadingsDoNotRedrawPanel() {
+        let model = MonitorModel()
+        var changes = 0
+        let watcher = model.objectWillChange.sink { changes += 1 }
+        model.receivePolledKeyboardBrightness(40)
+        model.receivePolledNightShift(false)
+        model.receivePolledBuiltInBrightness(70)
+        XCTAssertEqual(changes, 3)
+        for _ in 0..<5 {
+            model.receivePolledKeyboardBrightness(40)
+            model.receivePolledNightShift(false)
+            model.receivePolledBuiltInBrightness(70)
+        }
+        XCTAssertEqual(changes, 3, "a reading equal to the shown value must not publish")
+        model.receivePolledKeyboardBrightness(55)
+        model.receivePolledBuiltInBrightness(71)
+        XCTAssertEqual(changes, 5)
+        XCTAssertEqual(model.keyboardBrightnessValue, 55)
+        XCTAssertEqual(model.builtInBrightnessValue, 71)
+        watcher.cancel()
+    }
+
     func testWriteRequiresMatchingReadback() {
         XCTAssertEqual(writeOutcome(requested: 52, readback: HardwareLevels(current: 52, maximum: 100)), .verified)
         XCTAssertEqual(writeOutcome(requested: 52, readback: HardwareLevels(current: 58, maximum: 100)), .mismatch)
