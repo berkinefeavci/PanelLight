@@ -40,14 +40,16 @@ import AppKit
             windows.removeValue(forKey: id)?.orderOut(nil)
             return
         }
-        let window = windows[id] ?? makeWindow()
+        let window = windows[id] ?? Self.makeOverlayWindow()
         windows[id] = window
         window.setFrame(screen.frame, display: false)
         window.alphaValue = (100 - value) / 100 * maximumDim
         window.orderFrontRegardless()
     }
 
-    private func makeWindow() -> NSWindow {
+    // The overlay must never take input or cover the panel: it ignores the mouse, cannot become key, and sits
+    // below the PanelLight panel (.popUpMenu) while staying above the menu bar and Dock.
+    static func makeOverlayWindow() -> NSWindow {
         let window = NSWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.backgroundColor = .black
@@ -55,7 +57,6 @@ import AppKit
         window.hasShadow = false
         window.ignoresMouseEvents = true
         window.animationBehavior = .none
-        // Above the menu bar and Dock; the PanelLight panel sits higher so it stays readable.
         window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         return window

@@ -368,11 +368,11 @@ struct QuickPanel: View {
 
                 sectionTitle("Help and updates")
                 HStack(spacing: 12) {
-                    Link("Report a bug", destination: URL(string: "https://github.com/berkinefeavci/PanelLight/issues/new?template=bug_report.yml")!)
-                    Link("Suggest a feature", destination: URL(string: "https://github.com/berkinefeavci/PanelLight/issues/new?template=feature_request.yml")!)
+                    Link("Report a bug", destination: SupportLinks.reportBug)
+                    Link("Suggest a feature", destination: SupportLinks.suggestFeature)
                 }
                 HStack {
-                    Link("Check for updates", destination: URL(string: "https://github.com/berkinefeavci/PanelLight/releases/latest")!)
+                    Link("Check for updates", destination: SupportLinks.latestRelease)
                     Spacer()
                     if let version = AppInfo.versionText {
                         Text(version)
@@ -430,7 +430,7 @@ struct QuickPanel: View {
         case 0x12: "HDMI 2"
         case 0x0f: "DisplayPort 1"
         case 0x10: "DisplayPort 2"
-        default: String(format: "0x%02X", code)
+        default: String(format: "0x%02X", UInt32(code))
         }
     }
 }

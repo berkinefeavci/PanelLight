@@ -40,13 +40,14 @@ static bool MBLoadDisplayServices(void) {
 bool MBReadBuiltInBrightness(uint32_t displayID, float *value) {
     if (!value || !MBLoadDisplayServices()) return false;
     float level = -1;
-    if (displayBrightnessGet(displayID, &level) != 0 || level < 0 || level > 1) return false;
+    if (displayBrightnessGet(displayID, &level) != 0 || !isfinite(level) || level < 0 || level > 1) return false;
     *value = level;
     return true;
 }
 
 bool MBWriteBuiltInBrightness(uint32_t displayID, float value) {
-    if (!MBLoadDisplayServices() || value < 0 || value > 1 || displayBrightnessSet(displayID, value) != 0) return false;
+    if (!MBLoadDisplayServices() || !isfinite(value) || value < 0 || value > 1 ||
+        displayBrightnessSet(displayID, value) != 0) return false;
     if (displayBrightnessChanged) displayBrightnessChanged(displayID, value);
     return true;
 }
@@ -64,18 +65,27 @@ static id MBKeyboardClient(void) {
     return client;
 }
 
+// Private frameworks can change what they return; a wrong class would crash on the first unknown selector.
+static bool MBIsKindOf(id object, const char *className) {
+    Class cls = objc_getClass(className);
+    return object && cls && ((BOOL (*)(id, SEL, Class))objc_msgSend)(object, sel_registerName("isKindOfClass:"), cls);
+}
+
 static bool MBKeyboardID(uint64_t *keyboardID) {
     id client = MBKeyboardClient();
-    if (!client || !class_getInstanceMethod(object_getClass(client), sel_registerName("copyKeyboardBacklightIDs"))) return false;
+    if (!keyboardID || !client || !class_getInstanceMethod(object_getClass(client), sel_registerName("copyKeyboardBacklightIDs"))) return false;
     id ids = ((id (*)(id, SEL))objc_msgSend)(client, sel_registerName("copyKeyboardBacklightIDs"));
     if (!ids) return false;
-    uint64_t count = ((uint64_t (*)(id, SEL))objc_msgSend)(ids, sel_registerName("count"));
-    if (count) {
+    bool found = false;
+    if (MBIsKindOf(ids, "NSArray") && ((uint64_t (*)(id, SEL))objc_msgSend)(ids, sel_registerName("count")) > 0) {
         id number = ((id (*)(id, SEL, uint64_t))objc_msgSend)(ids, sel_registerName("objectAtIndex:"), 0);
-        *keyboardID = ((uint64_t (*)(id, SEL))objc_msgSend)(number, sel_registerName("unsignedLongLongValue"));
+        if (MBIsKindOf(number, "NSNumber")) {
+            *keyboardID = ((uint64_t (*)(id, SEL))objc_msgSend)(number, sel_registerName("unsignedLongLongValue"));
+            found = true;
+        }
     }
     ((void (*)(id, SEL))objc_msgSend)(ids, sel_registerName("release"));
-    return count > 0;
+    return found;
 }
 
 bool MBReadKeyboardBrightness(float *value) {
@@ -116,7 +126,7 @@ bool MBReadNightShift(bool *active, bool *enabled, int32_t *mode) {
     SEL selector = sel_registerName("getBlueLightStatus:");
     if (!active || !enabled || !mode || !client ||
         !class_getInstanceMethod(object_getClass(client), selector)) return false;
-    uint8_t status[64] = {0};
+    uint8_t status[256] = {0};   // the private status struct is ~50 bytes; the spare room guards against it growing
     if (!((BOOL (*)(id, SEL, void *))objc_msgSend)(client, selector, status)) return false;
     int32_t rawMode;
     memcpy(&rawMode, status + 4, sizeof(rawMode));

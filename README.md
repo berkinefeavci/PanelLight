@@ -47,7 +47,7 @@ Requires Xcode with the macOS SDK.
 open dist/PanelLight.app
 ```
 
-The script builds an Apple Silicon app and ad-hoc signs `dist/PanelLight.app` for local use. Release builds are Developer ID signed and notarized by Apple.
+The script builds an Apple Silicon app and ad-hoc signs `dist/PanelLight.app` for local use. Release builds are Developer ID signed and notarized by Apple: set `SIGN_IDENTITY` to the Developer ID identity and the script signs with the hardened runtime and a secure timestamp.
 
 ```bash
 swift test

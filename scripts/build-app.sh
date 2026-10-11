@@ -14,5 +14,12 @@ xcrun actool "$PWD/Resources/PanelLight.icon" \
   --app-icon PanelLight --platform macosx \
   --minimum-deployment-target 12.0 --target-device mac
 test -s "$app/Contents/Resources/PanelLight.icns"
-codesign --force --sign - "$app"
+# SIGN_IDENTITY unset or "-": ad-hoc signature for local use. A Developer ID identity signs with the hardened
+# runtime and a secure timestamp (both required for notarization); no entitlements file is used.
+identity="${SIGN_IDENTITY:--}"
+if [ "$identity" = "-" ]; then
+  codesign --force --sign - "$app"
+else
+  codesign --force --sign "$identity" --options runtime --timestamp "$app"
+fi
 echo "$app"

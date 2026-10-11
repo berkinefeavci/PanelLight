@@ -13,3 +13,12 @@ enum AppInfo {
         return String(localized: "Version \(short) (\(build))")
     }
 }
+
+// Every link the app opens is a constant HTTPS URL into the project's own repository.
+enum SupportLinks {
+    private static let repository = "https://github.com/berkinefeavci/PanelLight"
+    static let reportBug = URL(string: repository + "/issues/new?template=bug_report.yml")!
+    static let suggestFeature = URL(string: repository + "/issues/new?template=feature_request.yml")!
+    static let latestRelease = URL(string: repository + "/releases/latest")!
+    static var all: [URL] { [reportBug, suggestFeature, latestRelease] }
+}
