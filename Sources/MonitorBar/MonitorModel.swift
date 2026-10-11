@@ -19,7 +19,6 @@ enum IssueSource: Equatable {
     @Published private(set) var nightShiftWarm: Bool?
     @Published private(set) var linkBrightness = UserDefaults.standard.bool(forKey: "linkBrightness")
     @Published private(set) var contrastValue = 0.0
-    @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var launchAtLogin = false
     @Published private(set) var loginItemNeedsApproval = false
@@ -41,6 +40,8 @@ enum IssueSource: Equatable {
     private var builtInWritePending = false
     private var builtInContrastFailed = false
     private var errorSource: IssueSource?
+    // A probe is running; the same display list does not start another one.
+    private var isProbing = false
     private var nightShiftEnabledBeforeOverride: Bool?
     private var builtInPollTimer: Timer?
     private var lastMirroredBuiltIn: Double?
@@ -287,7 +288,8 @@ enum IssueSource: Equatable {
     private func updateDisplays(_ newDisplays: [DisplayIdentity], force: Bool) {
         dimmer.keep(only: softwareDimmed.intersection(newDisplays.map(\.id)))
         let nextBuiltInDisplay = DisplayDiscovery.builtInDisplay()
-        if !force && newDisplays == displays && nextBuiltInDisplay?.id == builtInDisplay?.id && !probes.isEmpty {
+        if !force && newDisplays == displays && nextBuiltInDisplay?.id == builtInDisplay?.id &&
+            (!probes.isEmpty || isProbing) {
             return
         }
         generation += 1
@@ -309,17 +311,19 @@ enum IssueSource: Equatable {
         if newDisplays.isEmpty {
             probes = []
             softwareDimmed = []
-            isLoading = false
+            isProbing = false
             return
         }
         probe(newDisplays, token: generation)
     }
 
     private func probe(_ displays: [DisplayIdentity], token: Int) {
-        isLoading = true
+        isProbing = true
         let requestsAtStart = brightnessRequests
         let contrastRequestAtStart = contrastRequest
-        DDCClient.shared.probe(displays: displays.filter { !$0.isVirtual }) { [weak self] results in
+        // Displays not yet known to lack DDC/CI get a few more tries before they fall back to software dimming.
+        let patient = Set(displays.map(\.id)).subtracting(softwareDimmed)
+        DDCClient.shared.probe(displays: displays.filter { !$0.isVirtual }, patient: patient) { [weak self] results in
             Task { @MainActor in
                 guard let self, self.generation == token else { return }
                 var dimmed = Set<UInt32>()
@@ -338,11 +342,11 @@ enum IssueSource: Equatable {
                     dimmed.insert(display.id)
                     let result = results.first { $0.display.id == display.id }
                     return DDCProbe(display: display, brightness: self.softwareLevels(display.id),
-                                    contrast: nil, input: result?.input, issue: nil)
+                                    contrast: nil, input: result?.input, issue: result?.issue)
                 }
                 self.softwareDimmed = dimmed
                 self.dimmer.keep(only: dimmed)
-                self.isLoading = false
+                self.isProbing = false
                 self.clearError(from: .display)
                 self.syncContrast()
                 self.syncExternalToBuiltIn()
@@ -380,7 +384,8 @@ enum IssueSource: Equatable {
                     self.report(String(localized: "\(display.name) reported a different value"), source: .display)
                 case .unreadable:
                     self.report(String(localized: "\(display.name) did not confirm the change"), source: .display)
-                    self.probe(self.displays, token: token)
+                    // The write already retried; look again at what the monitor can do, once at a time.
+                    if !self.isProbing { self.probe(self.displays, token: token) }
                 }
             }
         }

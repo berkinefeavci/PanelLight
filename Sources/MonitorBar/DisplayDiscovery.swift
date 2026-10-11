@@ -4,6 +4,11 @@ import CoreGraphics
 final class DisplayDiscovery: @unchecked Sendable {
     var onChange: (([DisplayIdentity], Bool) -> Void)?
     private var wakeObserver: NSObjectProtocol?
+    // Monitors need a moment after a wake before they answer DDC/CI; probing at once makes them look dead.
+    private let wakeSettleDelay: TimeInterval
+    private var wakeGeneration = 0
+
+    init(wakeSettleDelay: TimeInterval = 2) { self.wakeSettleDelay = wakeSettleDelay }
 
     func start() {
         CGDisplayRegisterReconfigurationCallback(Self.displayChanged, Unmanaged.passUnretained(self).toOpaque())
@@ -11,11 +16,21 @@ final class DisplayDiscovery: @unchecked Sendable {
             forName: NSWorkspace.didWakeNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in self?.publish(force: true) }
+        ) { [weak self] _ in self?.refreshAfterWake() }
         publish()
     }
 
+    private func refreshAfterWake() {
+        wakeGeneration += 1
+        let current = wakeGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + wakeSettleDelay) { [weak self] in
+            guard let self, self.wakeGeneration == current else { return }
+            self.publish(force: true)
+        }
+    }
+
     func stop() {
+        wakeGeneration += 1
         CGDisplayRemoveReconfigurationCallback(Self.displayChanged, Unmanaged.passUnretained(self).toOpaque())
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)

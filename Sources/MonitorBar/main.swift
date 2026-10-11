@@ -23,7 +23,7 @@ if CommandLine.arguments.contains("--probe") {
         for probe in results {
             let level = probe.brightness.map { "\($0.current)/\($0.maximum)" } ?? "unavailable"
             print("\(probe.display.name) [\(probe.display.id)]: brightness \(level)")
-            if let issue = probe.issue { print("  \(issue)") }
+            if let issue = probe.issue { print("  \(issue.summary)") }
         }
         exit(0)
     }
