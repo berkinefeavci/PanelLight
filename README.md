@@ -10,7 +10,7 @@ Every display on your Mac, one menu bar panel. PanelLight controls the brightnes
 - **Link.** Turn on **Link** and the rows collapse into a single **All displays** slider. The Mac's brightness keys then move every display together.
 - **Hardware brightness over DDC/CI.** Monitors that support DDC/CI change their real backlight, not a filter.
 - **Software dimming as a fallback.** Sidecar, AirPlay, and monitors that do not answer DDC/CI are dimmed with a click-through overlay, marked **Software** in the panel.
-- **Keyboard backlight, contrast, and Night Shift.** Contrast applies to every monitor that supports it and to the built-in display through a color curve. Night Shift switches to warm light from the panel.
+- **Keyboard backlight, contrast, and Night Shift.** The contrast row appears only while a connected monitor reports DDC/CI contrast. It then applies to every such monitor and, through a color curve, to the built-in display. Night Shift switches to warm light from the panel.
 - **Show only what you use.** Hide the keyboard backlight, contrast, Night Shift, or monitor input rows in Settings. Hiding a row does not change the light or setting itself.
 - **Open at login**, custom slider colors, and Liquid Glass on macOS 26.
 - English and Turkish, following your macOS language.
@@ -32,7 +32,7 @@ Tested on a MacBook Pro (Apple Silicon) with a Fazeon X27F166QB monitor over DDC
 
 ## Why it is not on the Mac App Store
 
-Monitor brightness over DDC/CI, built-in display brightness, the keyboard backlight, and Night Shift are reached through private macOS interfaces that the App Store sandbox does not allow. Tools such as MonitorControl and Lunar are distributed outside the App Store for the same reason. A macOS update can change these interfaces; PanelLight hides a control when it stops responding.
+Monitor brightness over DDC/CI, built-in display brightness, the keyboard backlight, and Night Shift are reached through private macOS interfaces that the App Store sandbox does not allow. Tools such as MonitorControl and Lunar are distributed outside the App Store for the same reason. A macOS update can change these interfaces. When the keyboard backlight or Night Shift stops responding, PanelLight hides that row; a monitor that stops answering DDC/CI is dimmed in software instead.
 
 ## Privacy
 
@@ -58,7 +58,7 @@ dist/PanelLight.app/Contents/MacOS/MonitorBar --preview   # opens the panel in a
 ## Notes
 
 - Percentages are device control values, not measured light output.
-- Contrast on the built-in display uses a gamma curve. PanelLight restores the original curve on exit, and again on the next launch if it ever quits unexpectedly. Other color tools such as Night Shift can replace the curve while PanelLight runs.
+- Contrast on the built-in display uses a gamma curve and is offered only together with a monitor that supports contrast. PanelLight restores the original curve on exit, and again on the next launch if it ever quits unexpectedly. Other color tools such as Night Shift can replace the curve while PanelLight runs.
 - PanelLight does not take over the brightness keys. With **Link** on, it follows the built-in display when you press them.
 
 ## Source research

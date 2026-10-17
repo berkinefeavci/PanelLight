@@ -54,10 +54,50 @@ final class MonitorModelTests: XCTestCase {
         XCTAssertEqual(writeOutcome(requested: 52, readback: HardwareLevels(current: 58, maximum: 100)), .mismatch)
         XCTAssertEqual(writeOutcome(requested: 52, readback: nil), .unreadable)
     }
+
+    func testBusyMonitorIsRetriedBeforeGivingUp() {
+        var calls = 0
+        let recovered: Int? = retrying(attempts: 3, pause: 0) { calls += 1; return calls == 3 ? 7 : nil }
+        XCTAssertEqual(recovered, 7)
+        XCTAssertEqual(calls, 3)
+
+        calls = 0
+        let dead: Int? = retrying(attempts: 3, pause: 0) { calls += 1; return nil }
+        XCTAssertNil(dead)
+        XCTAssertEqual(calls, 3)
+    }
+
+    func testOneMissedProbeKeepsHardwareControlButTheSecondFallsBack() {
+        XCTAssertTrue(keepsLastKnown(hadHardware: true, consecutiveMisses: 1))
+        XCTAssertFalse(keepsLastKnown(hadHardware: true, consecutiveMisses: 2))
+        XCTAssertFalse(keepsLastKnown(hadHardware: false, consecutiveMisses: 1))
+    }
 }
 
 @MainActor private enum TestRetainer {
     static var scheduler: WriteScheduler?
     static var writes: [Int] = []
     static var finishWrite: (@MainActor () -> Void)?
+}
+
+@MainActor final class LaunchAtLoginTests: XCTestCase {
+    private struct Refused: Error {}
+
+    func testFailedLoginItemChangeIsReportedForSettingsAndClearedOnRefresh() {
+        let model = MonitorModel()
+        model.loginItemChange = { _ in throw Refused() }
+        model.setLaunchAtLogin(true)
+        XCTAssertNotNil(model.launchAtLoginError)
+        model.clearErrors()
+        XCTAssertNil(model.launchAtLoginError)
+    }
+
+    func testSuccessfulLoginItemChangeClearsEarlierError() {
+        let model = MonitorModel()
+        model.loginItemChange = { _ in throw Refused() }
+        model.setLaunchAtLogin(true)
+        model.loginItemChange = { _ in }
+        model.setLaunchAtLogin(true)
+        XCTAssertNil(model.launchAtLoginError)
+    }
 }

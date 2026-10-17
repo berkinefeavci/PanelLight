@@ -53,3 +53,10 @@ final class BuiltInContrastController {
         UserDefaults.standard.set(false, forKey: Self.modifiedKey)
     }
 }
+
+// "PanelLight 0.2.0 (11)" from Info.plist; nil when run outside an app bundle (swift run, tests).
+func appVersionText(_ info: [String: Any]? = Bundle.main.infoDictionary) -> String? {
+    guard let version = info?["CFBundleShortVersionString"] as? String else { return nil }
+    let build = (info?["CFBundleVersion"] as? String).map { " (\($0))" } ?? ""
+    return "PanelLight \(version)\(build)"
+}

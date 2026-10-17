@@ -9,3 +9,15 @@ final class DisplayAdjustmentTests: XCTestCase {
         XCTAssertEqual(adjustedContrastTable(original, percent: 100), [0, 0.125, 0.5, 0.875, 1])
     }
 }
+
+final class VersionTextTests: XCTestCase {
+    func testVersionTextShowsVersionAndBuild() {
+        let info: [String: Any] = ["CFBundleShortVersionString": "0.2.0", "CFBundleVersion": "11"]
+        XCTAssertEqual(appVersionText(info), "PanelLight 0.2.0 (11)")
+    }
+
+    func testVersionTextIsEmptyWithoutBundleInfo() {
+        XCTAssertNil(appVersionText(nil))
+        XCTAssertNil(appVersionText([:]))
+    }
+}

@@ -105,6 +105,7 @@ struct QuickPanel: View {
                     if showContrast && model.canChangeContrast {
                         sliderRow(title: String(localized: "Contrast"), icon: "circle.lefthalf.filled",
                                   low: "circle.lefthalf.filled", high: "circle.righthalf.filled",
+                                  accessibilityLabel: String(localized: "Contrast"),
                                   value: { model.contrastValue },
                                   enabled: true,
                                   tint: barColor(contrastBarColor)) { model.setContrast($0) }
@@ -183,6 +184,7 @@ struct QuickPanel: View {
 
     private func sliderRow(title: String, icon: String, badge: String? = nil,
                            low: String = "sun.min.fill", high: String = "sun.max.fill",
+                           accessibilityLabel: String? = nil,
                            value: @escaping () -> Double?, enabled: Bool, tint: Color,
                            set: @escaping (Double) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -213,7 +215,7 @@ struct QuickPanel: View {
                     .font(.system(size: 9))
                     .frame(width: 16)
                 ColorSlider(value: Binding(get: { value() ?? 0 }, set: set), tint: tint,
-                            enabled: enabled && value() != nil, label: String(localized: "\(title) brightness"))
+                            enabled: enabled && value() != nil, label: accessibilityLabel ?? String(localized: "\(title) brightness"))
                     .frame(maxWidth: .infinity)
                 Image(systemName: high)
                     .font(.system(size: 13))
@@ -288,6 +290,12 @@ struct QuickPanel: View {
                         get: { model.launchAtLogin },
                         set: { model.setLaunchAtLogin($0) }
                     ))
+                    if let message = model.launchAtLoginError {
+                        Text(message)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Divider().padding(.vertical, 3)
                 }
 
@@ -317,7 +325,7 @@ struct QuickPanel: View {
                 if #available(macOS 26, *) {
                     Toggle("Glass buttons", isOn: $glassButtons)
                 }
-                Button("Night Shift settings…") { openDisplaySettings() }
+                Button("Display settings (Night Shift)…") { openDisplaySettings() }
                     .buttonStyle(.plain)
                     .foregroundStyle(.blue)
                 Divider().padding(.vertical, 3)
@@ -357,6 +365,13 @@ struct QuickPanel: View {
                 }
                 .controlSize(.small)
                 .padding(.top, 4)
+                if let version = appVersionText() {
+                    Text(version)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 2)
+                }
             }
             .font(.system(size: 11))
             .frame(maxWidth: .infinity, alignment: .leading)

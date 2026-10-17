@@ -15,6 +15,15 @@ struct DDCProbe: Sendable {
     let issue: String?
 }
 
+// A monitor that is busy or waking often misses a DDC/CI transaction; try again before treating it as gone.
+func retrying<T>(attempts: Int, pause: TimeInterval, _ body: () -> T?) -> T? {
+    for attempt in 0..<attempts {
+        if let value = body() { return value }
+        if attempt < attempts - 1 { Thread.sleep(forTimeInterval: pause) }
+    }
+    return nil
+}
+
 final class DDCClient: @unchecked Sendable {
     static let shared = DDCClient()
     private let queue = DispatchQueue(label: "com.berkinavci.MonitorBar.ddc", qos: .userInitiated)
@@ -29,7 +38,7 @@ final class DDCClient: @unchecked Sendable {
                     return DDCProbe(display: display, brightness: nil, contrast: nil, input: nil,
                                     issue: "No DDC/CI connection found")
                 }
-                let brightness = Self.read(0x10, index: index)
+                let brightness = retrying(attempts: 3, pause: 0.25) { Self.read(0x10, index: index) }
                 let contrast = Self.read(0x12, index: index)
                 let input = Self.read(0x60, index: index)?.current
                 return DDCProbe(display: display, brightness: brightness, contrast: contrast,
@@ -43,12 +52,12 @@ final class DDCClient: @unchecked Sendable {
     func write(display: DisplayIdentity, vcp: UInt8, raw: UInt16,
                completion: @escaping @Sendable (HardwareLevels?) -> Void) {
         queue.async {
-            MBRescan()
-            let index = matchDisplays([display], to: Self.services())[display.id]
-            var result: HardwareLevels?
-            if let index, let before = Self.read(vcp, index: index), raw <= before.maximum,
-               MBWriteVCP(index, vcp, raw) {
-                result = Self.read(vcp, index: index)
+            let result: HardwareLevels? = retrying(attempts: 3, pause: 0.25) {
+                MBRescan()
+                guard let index = matchDisplays([display], to: Self.services())[display.id],
+                      let before = Self.read(vcp, index: index), raw <= before.maximum,
+                      MBWriteVCP(index, vcp, raw) else { return nil }
+                return Self.read(vcp, index: index)
             }
             DispatchQueue.main.async { completion(result) }
         }
