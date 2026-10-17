@@ -363,6 +363,13 @@ struct QuickPanel: View {
                 }
                 .controlSize(.small)
                 .padding(.top, 4)
+                if let version = appVersionText() {
+                    Text(version)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 2)
+                }
             }
             .font(.system(size: 11))
             .frame(maxWidth: .infinity, alignment: .leading)
