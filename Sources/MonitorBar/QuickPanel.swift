@@ -325,7 +325,7 @@ struct QuickPanel: View {
                 if #available(macOS 26, *) {
                     Toggle("Glass buttons", isOn: $glassButtons)
                 }
-                Button("Night Shift settings…") { openDisplaySettings() }
+                Button("Display settings (Night Shift)…") { openDisplaySettings() }
                     .buttonStyle(.plain)
                     .foregroundStyle(.blue)
                 Divider().padding(.vertical, 3)
