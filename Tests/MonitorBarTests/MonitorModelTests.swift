@@ -61,3 +61,25 @@ final class MonitorModelTests: XCTestCase {
     static var writes: [Int] = []
     static var finishWrite: (@MainActor () -> Void)?
 }
+
+@MainActor final class LaunchAtLoginTests: XCTestCase {
+    private struct Refused: Error {}
+
+    func testFailedLoginItemChangeIsReportedForSettingsAndClearedOnRefresh() {
+        let model = MonitorModel()
+        model.loginItemChange = { _ in throw Refused() }
+        model.setLaunchAtLogin(true)
+        XCTAssertNotNil(model.launchAtLoginError)
+        model.clearErrors()
+        XCTAssertNil(model.launchAtLoginError)
+    }
+
+    func testSuccessfulLoginItemChangeClearsEarlierError() {
+        let model = MonitorModel()
+        model.loginItemChange = { _ in throw Refused() }
+        model.setLaunchAtLogin(true)
+        model.loginItemChange = { _ in }
+        model.setLaunchAtLogin(true)
+        XCTAssertNil(model.launchAtLoginError)
+    }
+}

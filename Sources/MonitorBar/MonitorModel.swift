@@ -17,6 +17,13 @@ import ServiceManagement
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var launchAtLogin = false
+    // Shown under the switch in Settings, the only place a failed change makes sense.
+    @Published private(set) var launchAtLoginError: String?
+    var loginItemChange: (Bool) throws -> Void = { enabled in
+        if #available(macOS 13, *) {
+            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        }
+    }
 
     private let discovery = DisplayDiscovery()
     private var brightnessQueues: [UInt32: LatestWriteQueue] = [:]
@@ -87,15 +94,22 @@ import ServiceManagement
     @available(macOS 13, *)
     func setLaunchAtLogin(_ enabled: Bool) {
         do {
-            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-            errorMessage = nil
+            try loginItemChange(enabled)
+            launchAtLoginError = nil
         } catch {
-            errorMessage = String(localized: "Open at login could not be changed")
+            launchAtLoginError = String(localized: "Open at login could not be changed")
         }
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
-    func refresh() { updateDisplays(DisplayDiscovery.externalDisplays(), force: true) }
+    func refresh() {
+        clearErrors()
+        updateDisplays(DisplayDiscovery.externalDisplays(), force: true)
+    }
+
+    func clearErrors() {
+        launchAtLoginError = nil
+    }
 
     func setLinkBrightness(_ enabled: Bool) {
         linkBrightness = enabled

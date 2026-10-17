@@ -288,6 +288,12 @@ struct QuickPanel: View {
                         get: { model.launchAtLogin },
                         set: { model.setLaunchAtLogin($0) }
                     ))
+                    if let message = model.launchAtLoginError {
+                        Text(message)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Divider().padding(.vertical, 3)
                 }
 
