@@ -48,3 +48,8 @@ func writeOutcome(requested: UInt16, readback: HardwareLevels?) -> WriteOutcome 
     guard let readback else { return .unreadable }
     return readback.current == requested ? .verified : .mismatch
 }
+
+// One missed probe (monitor asleep or busy) keeps the row that worked; a second in a row means it is really gone.
+func keepsLastKnown(hadHardware: Bool, consecutiveMisses: Int) -> Bool {
+    hadHardware && consecutiveMisses < 2
+}

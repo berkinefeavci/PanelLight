@@ -34,6 +34,7 @@ import ServiceManagement
     private let dimmer = SoftwareDimmer()
     private var generation = 0
     private var brightnessRequests: [UInt32: Int] = [:]
+    private var probeMisses: [UInt32: Int] = [:]
     private var contrastRequest = 0
     private var builtInRequest = 0
     private var keyboardRequest = 0
@@ -107,7 +108,9 @@ import ServiceManagement
         updateDisplays(DisplayDiscovery.externalDisplays(), force: true)
     }
 
+    // Called when the panel opens: a message from an earlier session of use should not greet the user.
     func clearErrors() {
+        errorMessage = nil
         launchAtLoginError = nil
     }
 
@@ -283,6 +286,7 @@ import ServiceManagement
         displays = newDisplays
         if newDisplays.isEmpty {
             probes = []
+            probeMisses = [:]
             softwareDimmed = []
             isLoading = false
             return
@@ -301,6 +305,7 @@ import ServiceManagement
                 self.probes = displays.map { display in
                     if let result = results.first(where: { $0.display.id == display.id }),
                        result.brightness != nil {
+                        self.probeMisses[display.id] = 0
                         // A slider moved during the probe: keep its newer value instead of the reading taken before it.
                         let current = self.probes.first { $0.display.id == display.id }
                         let brightnessMoved = self.brightnessRequests[display.id] != requestsAtStart[display.id]
@@ -309,6 +314,13 @@ import ServiceManagement
                                         brightness: brightnessMoved ? current?.brightness ?? result.brightness : result.brightness,
                                         contrast: contrastMoved ? current?.contrast ?? result.contrast : result.contrast,
                                         input: result.input, issue: result.issue)
+                    }
+                    let misses = (self.probeMisses[display.id] ?? 0) + 1
+                    self.probeMisses[display.id] = misses
+                    if let current = self.probes.first(where: { $0.display.id == display.id }),
+                       keepsLastKnown(hadHardware: current.brightness != nil && !self.softwareDimmed.contains(display.id),
+                                      consecutiveMisses: misses) {
+                        return current
                     }
                     dimmed.insert(display.id)
                     let result = results.first { $0.display.id == display.id }
