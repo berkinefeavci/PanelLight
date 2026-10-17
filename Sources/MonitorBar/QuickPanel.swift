@@ -105,6 +105,7 @@ struct QuickPanel: View {
                     if showContrast && model.canChangeContrast {
                         sliderRow(title: String(localized: "Contrast"), icon: "circle.lefthalf.filled",
                                   low: "circle.lefthalf.filled", high: "circle.righthalf.filled",
+                                  accessibilityLabel: String(localized: "Contrast"),
                                   value: { model.contrastValue },
                                   enabled: true,
                                   tint: barColor(contrastBarColor)) { model.setContrast($0) }
@@ -183,6 +184,7 @@ struct QuickPanel: View {
 
     private func sliderRow(title: String, icon: String, badge: String? = nil,
                            low: String = "sun.min.fill", high: String = "sun.max.fill",
+                           accessibilityLabel: String? = nil,
                            value: @escaping () -> Double?, enabled: Bool, tint: Color,
                            set: @escaping (Double) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -213,7 +215,7 @@ struct QuickPanel: View {
                     .font(.system(size: 9))
                     .frame(width: 16)
                 ColorSlider(value: Binding(get: { value() ?? 0 }, set: set), tint: tint,
-                            enabled: enabled && value() != nil, label: String(localized: "\(title) brightness"))
+                            enabled: enabled && value() != nil, label: accessibilityLabel ?? String(localized: "\(title) brightness"))
                     .frame(maxWidth: .infinity)
                 Image(systemName: high)
                     .font(.system(size: 13))
