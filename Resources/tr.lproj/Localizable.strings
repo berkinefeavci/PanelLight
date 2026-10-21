@@ -55,3 +55,5 @@
 "Version %@" = "Sürüm %@";
 "Checking the connection…" = "Bağlantı denetleniyor…";
 "No DDC/CI connection found, dimmed in software. Use a USB-C or DisplayPort connection; some docks and adapters do not pass DDC/CI." = "DDC/CI bağlantısı bulunamadı, yazılımla karartılıyor. USB-C ya da DisplayPort bağlantısı kullan; bazı dock ve adaptörler DDC/CI geçirmez.";
+"Sloped menu bar tab" = "Eğimli menü çubuğu dili";
+"The tab under the menu bar icon comes down in a long, soft slope instead of straight sides." = "Menü çubuğu simgesinin altındaki dil dik kenar yerine uzun, yumuşak bir eğimle iner.";

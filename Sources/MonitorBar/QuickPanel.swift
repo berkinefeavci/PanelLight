@@ -14,6 +14,7 @@ struct QuickPanel: View {
     @AppStorage("showContrast") private var showContrast = true
     @AppStorage("showNightShift") private var showNightShift = true
     @AppStorage("showInputs") private var showInputs = true
+    @AppStorage(HoverDrop.slopedKey) private var slopedTab = false
     @State private var showSettings = false
 
     var body: some View {
@@ -225,11 +226,7 @@ struct QuickPanel: View {
         }
     }
 
-    private func title(_ display: DisplayIdentity) -> String {
-        guard display.isVirtual else { return display.name }
-        if display.name.localizedCaseInsensitiveContains("Sidecar") { return "iPad" }
-        return display.name.replacingOccurrences(of: " (AirPlay)", with: "")
-    }
+    private func title(_ display: DisplayIdentity) -> String { displayTitle(display) }
 
     // The first probe has not finished for a display with no entry in `probes`: do not claim DDC/CI yet.
     private func connectionNote(_ display: DisplayIdentity) -> String {
@@ -249,14 +246,6 @@ struct QuickPanel: View {
     private func icon(_ display: DisplayIdentity) -> String {
         guard display.isVirtual else { return "display" }
         return display.name.localizedCaseInsensitiveContains("Sidecar") ? "ipad.landscape" : "airplayvideo"
-    }
-
-    private func barColor(_ hex: String) -> Color {
-        guard hex.count == 7, hex.first == "#",
-              let rgb = UInt32(hex.dropFirst(), radix: 16) else { return .blue }
-        return Color(red: Double((rgb >> 16) & 0xFF) / 255,
-                     green: Double((rgb >> 8) & 0xFF) / 255,
-                     blue: Double(rgb & 0xFF) / 255)
     }
 
     private func colorBinding(_ hex: Binding<String>) -> Binding<Color> {
@@ -348,6 +337,8 @@ struct QuickPanel: View {
                 if #available(macOS 26, *) {
                     Toggle("Glass buttons", isOn: $glassButtons)
                 }
+                Toggle("Sloped menu bar tab", isOn: $slopedTab)
+                    .help("The tab under the menu bar icon comes down in a long, soft slope instead of straight sides.")
                 Button("Night Shift settings…") { openDisplaySettings() }
                     .buttonStyle(.plain)
                     .foregroundStyle(.blue)
@@ -464,7 +455,15 @@ private struct PanelButtonStyle: ViewModifier {
     }
 }
 
-private struct ColorSlider: View {
+func barColor(_ hex: String) -> Color {
+    guard hex.count == 7, hex.first == "#",
+          let rgb = UInt32(hex.dropFirst(), radix: 16) else { return .blue }
+    return Color(red: Double((rgb >> 16) & 0xFF) / 255,
+                 green: Double((rgb >> 8) & 0xFF) / 255,
+                 blue: Double(rgb & 0xFF) / 255)
+}
+
+struct ColorSlider: View {
     @Binding var value: Double
     let tint: Color
     let enabled: Bool
