@@ -1,0 +1,22 @@
+--- a/Sources/MonitorBar/QuickPanel.swift
++++ b/Sources/MonitorBar/QuickPanel.swift
+@@ -339,7 +339,7 @@
+                 }
+                 Toggle("Sloped menu bar tab", isOn: $slopedTab)
+                     .help("The tab under the menu bar icon comes down in a long, soft slope instead of straight sides.")
+-                Button("Night Shift settings…") { openDisplaySettings() }
++                Button("Display settings (Night Shift)…") { openDisplaySettings() }
+                     .buttonStyle(.plain)
+                     .foregroundStyle(.blue)
+                 Divider().padding(.vertical, 3)
+--- a/Resources/tr.lproj/Localizable.strings
++++ b/Resources/tr.lproj/Localizable.strings
+@@ -22,7 +22,7 @@
+ "Keyboard backlight slider" = "Klavye ışığı çubuğu";
+ "Contrast slider" = "Kontrast çubuğu";
+ "Glass buttons" = "Cam düğmeler";
+-"Night Shift settings…" = "Night Shift ayarları…";
++"Display settings (Night Shift)…" = "Ekran ayarları (Night Shift)…";
+ "Help and updates" = "Yardım ve güncelleme";
+ "Report a bug" = "Hata bildir";
+ "Suggest a feature" = "Öneri gönder";

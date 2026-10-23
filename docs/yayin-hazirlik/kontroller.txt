@@ -1,0 +1,94 @@
+2026-10-24 — Yerel, derlemesiz doğrulama. Ağ çağrısı ve uygulama açılışı yok.
+
+$ git diff --check
+EXIT: 0
+
+$ bash -n scripts/build-app.sh
+EXIT: 0
+
+$ plutil -lint Resources/Info.plist Resources/en.lproj/Localizable.strings Resources/tr.lproj/Localizable.strings
+Resources/Info.plist: OK
+Resources/en.lproj/Localizable.strings: OK
+Resources/tr.lproj/Localizable.strings: OK
+EXIT: 0
+
+$ git apply --check docs/yayin-hazirlik/display-settings.patch
+error: patch failed: Sources/MonitorBar/QuickPanel.swift:325
+error: Sources/MonitorBar/QuickPanel.swift: patch does not apply
+EXIT: 1
+
+$ git apply --check docs/yayin-hazirlik/ddc-fixes-reference.patch
+error: patch failed: Sources/MonitorBar/DDCClient.swift:15
+error: Sources/MonitorBar/DDCClient.swift: patch does not apply
+error: patch failed: Sources/MonitorBar/MonitorModel.swift:107
+error: Sources/MonitorBar/MonitorModel.swift: patch does not apply
+EXIT: 1
+
+$ codesign --verify --strict /Applications/PanelLight.app
+EXIT: 0
+
+$ codesign -dv --verbose=4 /Applications/PanelLight.app
+Executable=/Applications/PanelLight.app/Contents/MacOS/MonitorBar
+Identifier=com.berkinavci.MonitorBar
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=2437 flags=0x10000(runtime) hashes=69+3 location=embedded
+VersionPlatform=1
+VersionMin=786432
+VersionSDK=786432
+Hash type=sha256 size=32
+CandidateCDHash sha256=430960bee12a0d5b2cfcd74c2b71ac6fd597be9a
+CandidateCDHashFull sha256=430960bee12a0d5b2cfcd74c2b71ac6fd597be9ae5430511c70e34e83afe9a77
+Hash choices=sha256
+CMSDigest=430960bee12a0d5b2cfcd74c2b71ac6fd597be9ae5430511c70e34e83afe9a77
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=344064
+Executable Segment flags=0x1
+Page size=16384
+CDHash=430960bee12a0d5b2cfcd74c2b71ac6fd597be9a
+Signature size=8980
+Authority=Developer ID Application: BERKIN EFE AVCI (A7V9NP35W2)
+Authority=Developer ID Certification Authority
+Authority=Apple Root CA
+Timestamp=21 Oct 2026 at 15:23:03
+Info.plist entries=16
+TeamIdentifier=A7V9NP35W2
+Runtime Version=12.0.0
+Sealed Resources version=2 rules=13 files=4
+Internal requirements count=1 size=188
+Total signatures=1
+Chosen signature=1
+EXIT: 0
+
+$ git log -1 --oneline origin/main
+df6eeee Merge pull request #2 from berkinefeavci/release/0.2.0
+EXIT: 0
+
+$ git log --oneline claude/menubar-hover..fix/broken-functions
+ad28241 Label the Displays-pane shortcut as Display settings, not Night Shift
+b2c0752 Read the contrast slider as "Contrast" to VoiceOver
+80475b9 Make the README describe what unresponsive controls and contrast really do
+579bd0e Retry a missed DDC/CI transaction and keep the last known monitor state
+3fb2498 Show the app version at the bottom of Settings
+368f864 Show the "Open at login" failure in Settings under the switch
+df6eeee Merge pull request #2 from berkinefeavci/release/0.2.0
+EXIT: 0
+
+PASS: version 0.2.2 (13)
+PASS: bundle ID preserved
+PASS: arm64 / macOS 12
+PASS: manual updates / issue links
+PASS: README honest contrast and fallback
+PASS: distribution files present
+PASS: no fresh release ZIP
+Swift birim testleri ÇALIŞTIRILMADI: temiz worktree derleme gerektirir; gece kısıtı.
+Kurulu uygulama imzası kaynak/ZIP eşleşmesini veya noter onayını kanıtlamaz.
+
+Son kontrol: display-settings.patch hover kaynağına uyarlandı (kaynağa uygulanmadı).
+$ git apply --check docs/yayin-hazirlik/display-settings.patch
+EXIT: 0
+
+$ rg -n URLSession|URLRequest|NWConnection|Sentry|Crashlytics|telemetry|analytics Sources Package.swift
+Eşleşme yok (exit 1); bu bir kapsamlı gizlilik/hak denetimi değildir.
+
+Teslim kontrolü: iç içe referans yamasının boş bağlam satırları staged diff --check uyarısı üretti. Referans yama sıfır bağlamla yeniden çıkarıldı; davranış kodu değişmedi.
