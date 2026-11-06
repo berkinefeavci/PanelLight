@@ -344,6 +344,10 @@ struct QuickPanel: View {
                     .foregroundStyle(.blue)
                 Divider().padding(.vertical, 3)
 
+                sectionTitle("Screen corners")
+                ScreenCornersSettingsView()
+                Divider().padding(.vertical, 3)
+
                 sectionTitle("Connection")
                 ForEach(model.displays, id: \.id) { item in
                     VStack(alignment: .leading, spacing: 1) {

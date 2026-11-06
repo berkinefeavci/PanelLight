@@ -16,6 +16,7 @@ private final class MonitorPanel: NSPanel {
     private var transition = 0
     private var isOpen = false
     private var hoverDrop: HoverDrop?
+    private var screenCorners: ScreenCorners?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -52,6 +53,7 @@ private final class MonitorPanel: NSPanel {
             self?.closePanelIfOutside(at: NSEvent.mouseLocation)
         }
         model.start()
+        screenCorners = ScreenCorners()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

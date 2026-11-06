@@ -57,3 +57,14 @@
 "No DDC/CI connection found, dimmed in software. Use a USB-C or DisplayPort connection; some docks and adapters do not pass DDC/CI." = "DDC/CI bağlantısı bulunamadı, yazılımla karartılıyor. USB-C ya da DisplayPort bağlantısı kullan; bazı dock ve adaptörler DDC/CI geçirmez.";
 "Sloped menu bar tab" = "Eğimli menü çubuğu dili";
 "The tab under the menu bar icon comes down in a long, soft slope instead of straight sides." = "Menü çubuğu simgesinin altındaki dil dik kenar yerine uzun, yumuşak bir eğimle iner.";
+"Screen corners" = "Ekran köşeleri";
+"Rounded screen corners" = "Kavisli ekran köşeleri";
+"Draws rounded black corners on screens with square corners. Clicks pass through." = "Köşeli ekranlara siyah kavisli köşeler çizer. Tıklamalar geçer.";
+"Corners" = "Köşeler";
+"All" = "Hepsi";
+"Top" = "Üst";
+"Bottom" = "Alt";
+"Radius" = "Yarıçap";
+"Smooth curve" = "Yumuşak eğri";
+"Uses Apple's continuous curve, like the hardware corners." = "Donanım köşeleri gibi Apple'ın sürekli eğrisini kullanır.";
+"External displays" = "Harici ekranlar";
