@@ -24,11 +24,15 @@ struct ScreenCornerSettings: Equatable {
         func bool(_ k: String, _ fallback: Bool) -> Bool { d.object(forKey: k) == nil ? fallback : d.bool(forKey: k) }
         let radius = d.object(forKey: ScreenCornerKeys.radius) == nil ? base.radius : d.double(forKey: ScreenCornerKeys.radius)
         return ScreenCornerSettings(enabled: bool(ScreenCornerKeys.enabled, base.enabled),
-                                    radius: min(60, max(0, radius)),
+                                    radius: normalizedRadius(radius),
                                     smooth: bool(ScreenCornerKeys.smooth, base.smooth),
                                     external: bool(ScreenCornerKeys.external, base.external),
                                     top: bool(ScreenCornerKeys.top, base.top),
                                     bottom: bool(ScreenCornerKeys.bottom, base.bottom))
+    }
+
+    static func normalizedRadius(_ radius: Double) -> Double {
+        radius.isFinite ? min(60, max(0, radius)) : ScreenCornerKeys.defaultRadius
     }
 
     /// Full rect plus the rounded inner rect; filled even-odd, only the corner pieces stay black. Top-left origin.
@@ -159,8 +163,8 @@ struct ScreenCornersSettingsView: View {
                 .pickerStyle(.segmented)
                 HStack(spacing: 8) {
                     Text("Radius")
-                    Slider(value: Binding(get: { radius }, set: { radius = $0.rounded() }), in: 0...60)
-                    Text("\(Int(radius)) pt")
+                    Slider(value: Binding(get: { ScreenCornerSettings.normalizedRadius(radius) }, set: { radius = $0.rounded() }), in: 0...60)
+                    Text("\(Int(ScreenCornerSettings.normalizedRadius(radius))) pt")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                         .frame(width: 38, alignment: .trailing)

@@ -29,4 +29,13 @@ final class ScreenCornerSettingsTests: XCTestCase {
         XCTAssertFalse(s.top)
         XCTAssertTrue(s.bottom)
     }
+    func testNonFiniteRadiusFallsBackToDefault() {
+        let suite = "ScreenCornerSettingsTests-invalid-radius"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for radius in [Double.nan, Double.infinity, -Double.infinity] {
+            defaults.set(radius, forKey: ScreenCornerKeys.radius)
+            XCTAssertEqual(ScreenCornerSettings.load(defaults).radius, ScreenCornerKeys.defaultRadius)
+        }
+    }
 }
