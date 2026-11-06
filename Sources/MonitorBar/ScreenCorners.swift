@@ -17,16 +17,18 @@ enum ScreenCornerKeys {
 struct ScreenCornerSettings: Equatable {
     var enabled = false, radius = ScreenCornerKeys.defaultRadius, smooth = false, external = true, top = true, bottom = true
 
+    /// Reads with fallbacks instead of register(defaults:): registering posts UserDefaults.didChangeNotification,
+    /// and ScreenCorners reloads on that notification, which recursed until the stack overflowed (Settings crash).
     static func load(_ d: UserDefaults = .standard) -> ScreenCornerSettings {
-        d.register(defaults: [ScreenCornerKeys.enabled: false, ScreenCornerKeys.radius: ScreenCornerKeys.defaultRadius,
-                              ScreenCornerKeys.smooth: false, ScreenCornerKeys.external: true,
-                              ScreenCornerKeys.top: true, ScreenCornerKeys.bottom: true])
-        return ScreenCornerSettings(enabled: d.bool(forKey: ScreenCornerKeys.enabled),
-                                    radius: min(60, max(0, d.double(forKey: ScreenCornerKeys.radius))),
-                                    smooth: d.bool(forKey: ScreenCornerKeys.smooth),
-                                    external: d.bool(forKey: ScreenCornerKeys.external),
-                                    top: d.bool(forKey: ScreenCornerKeys.top),
-                                    bottom: d.bool(forKey: ScreenCornerKeys.bottom))
+        let base = ScreenCornerSettings()
+        func bool(_ k: String, _ fallback: Bool) -> Bool { d.object(forKey: k) == nil ? fallback : d.bool(forKey: k) }
+        let radius = d.object(forKey: ScreenCornerKeys.radius) == nil ? base.radius : d.double(forKey: ScreenCornerKeys.radius)
+        return ScreenCornerSettings(enabled: bool(ScreenCornerKeys.enabled, base.enabled),
+                                    radius: min(60, max(0, radius)),
+                                    smooth: bool(ScreenCornerKeys.smooth, base.smooth),
+                                    external: bool(ScreenCornerKeys.external, base.external),
+                                    top: bool(ScreenCornerKeys.top, base.top),
+                                    bottom: bool(ScreenCornerKeys.bottom, base.bottom))
     }
 
     /// Full rect plus the rounded inner rect; filled even-odd, only the corner pieces stay black. Top-left origin.
