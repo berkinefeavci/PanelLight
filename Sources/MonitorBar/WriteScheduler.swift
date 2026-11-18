@@ -37,14 +37,3 @@ import Foundation
         }
     }
 }
-
-enum WriteOutcome: Equatable {
-    case verified
-    case mismatch
-    case unreadable
-}
-
-func writeOutcome(requested: UInt16, readback: HardwareLevels?) -> WriteOutcome {
-    guard let readback else { return .unreadable }
-    return readback.current == requested ? .verified : .mismatch
-}

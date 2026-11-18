@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import DDCBridge
 
 final class DisplayDiscovery: @unchecked Sendable {
     var onChange: (([DisplayIdentity], Bool) -> Void)?
@@ -78,7 +79,14 @@ final class DisplayDiscovery: @unchecked Sendable {
                                    vendor: vendor,
                                    product: CGDisplayModelNumber(id),
                                    serial: CGDisplaySerialNumber(id),
-                                   isVirtual: isVirtualDisplay(vendor: vendor, name: name))
+                                   isVirtual: isVirtualDisplay(vendor: vendor, name: name),
+                                   port: port(of: id))
         }
+    }
+
+    static func port(of id: CGDirectDisplayID) -> String? {
+        var buffer = [CChar](repeating: 0, count: 512)
+        guard MBDisplayLocation(id, &buffer, buffer.count) else { return nil }
+        return framebufferPort(fromDisplayLocation: cString(buffer))
     }
 }

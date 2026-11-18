@@ -160,6 +160,7 @@ typedef struct {
     uint32_t product;
     uint32_t serial;
     bool hasEDID;
+    io_string_t path;
 } MBEntry;
 
 static MBEntry entries[8];
@@ -243,6 +244,7 @@ void MBRescan(void) {
             if (service) {
                 MBEntry *entry = &entries[entryCount++];
                 entry->service = service;
+                if (IORegistryEntryGetPath(node, kIOServicePlane, entry->path) != KERN_SUCCESS) entry->path[0] = 0;
                 CFDataRef edid = NULL;
                 if (copyEDID && copyEDID(service, &edid) == KERN_SUCCESS && edid) {
                     if (CFDataGetLength(edid) >= 16) {
@@ -278,6 +280,39 @@ bool MBServiceIdentity(int32_t index, uint32_t *vendor, uint32_t *product, uint3
     if (product) *product = entries[index].product;
     if (serial) *serial = entries[index].serial;
     return true;
+}
+
+static bool MBCopyCString(const char *text, char *buffer, size_t size) {
+    if (!text || !buffer || size == 0 || text[0] == 0 || strlen(text) >= size) return false;
+    memcpy(buffer, text, strlen(text) + 1);
+    return true;
+}
+
+bool MBServicePath(int32_t index, char *buffer, size_t size) {
+    if (!MBValidIndex(index)) return false;
+    return MBCopyCString(entries[index].path, buffer, size);
+}
+
+typedef CFDictionaryRef (*MBDisplayInfo)(uint32_t);
+
+bool MBDisplayLocation(uint32_t displayID, char *buffer, size_t size) {
+    static MBDisplayInfo displayInfo;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *library = dlopen("/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay", RTLD_NOW);
+        if (library) displayInfo = (MBDisplayInfo)dlsym(library, "CoreDisplay_DisplayCreateInfoDictionary");
+    });
+    if (!displayInfo || !buffer || size == 0) return false;
+    CFDictionaryRef info = displayInfo(displayID);
+    if (!info) return false;
+    bool found = false;
+    if (CFGetTypeID(info) == CFDictionaryGetTypeID()) {
+        CFTypeRef location = CFDictionaryGetValue(info, CFSTR("IODisplayLocation"));
+        found = location && CFGetTypeID(location) == CFStringGetTypeID() &&
+                CFStringGetCString((CFStringRef)location, buffer, (CFIndex)size, kCFStringEncodingUTF8);
+    }
+    CFRelease(info);
+    return found;
 }
 
 bool MBReadVCP(int32_t index, uint8_t code, uint16_t *current, uint16_t *maximum) {

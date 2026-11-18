@@ -64,6 +64,64 @@ func settledProbes(for displays: [DisplayIdentity], patient: Set<UInt32>, policy
     return results
 }
 
+// What a monitor did with a written value, judged from what it reports afterwards.
+enum DDCWriteResult: Equatable, Sendable {
+    case applied(HardwareLevels)   // it reports the requested level
+    case adjusted(HardwareLevels)  // it moved, but settled on a level of its own (rounded or clamped)
+    case ignored(HardwareLevels)   // it kept the level it had: the control is locked (HDR, picture mode, …)
+    case unreadable                // no reading before or after the write
+}
+
+// Many monitors take a few hundred milliseconds to land on a new level, and some fade to it. One reading right
+// after the write called those "a different value" and threw the slider back, so the reading is repeated while
+// the value is still on its way.
+struct DDCSettlePolicy: Sendable {
+    var pauses: [TimeInterval]
+    var resendPause: TimeInterval
+
+    static let write = DDCSettlePolicy(pauses: [0.1, 0.25, 0.4], resendPause: 0.3)
+}
+
+// `write` sends a raw level, `read` reads the control. The first write has already been sent.
+func settleWrite(requested: UInt16, before: HardwareLevels, policy: DDCSettlePolicy = .write,
+                 pause: DDCPause = { Thread.sleep(forTimeInterval: $0) },
+                 write: (UInt16) -> Bool, read: () -> HardwareLevels?) -> DDCWriteResult {
+    guard var last = read() else { return .unreadable }
+    for wait in policy.pauses where last.current != requested {
+        pause(wait)
+        guard let next = read() else { break }
+        // Off the old level and holding still: the monitor has landed where it wants to be.
+        let landed = next.current == last.current && next.current != before.current
+        last = next
+        if landed { break }
+    }
+    if last.current == requested { return .applied(last) }
+    if last.current != before.current { return .adjusted(last) }
+
+    // Still on the old level. One more write tells a request lost on the wire from a refusal.
+    guard write(requested) else { return .ignored(last) }
+    pause(policy.resendPause)
+    let resent = read() ?? last
+    if resent.current == requested { return .applied(resent) }
+    if resent.current != before.current { return .adjusted(resent) }
+
+    // Refused twice. A monitor sitting at a limit of its own (a brightness floor in an eco mode, say) refuses a
+    // step past it but takes a step back; a locked control takes neither. The step is put back right away.
+    let back: UInt16? = requested < before.current
+        ? (before.current < before.maximum ? before.current + 1 : nil)
+        : (before.current > 0 ? before.current - 1 : nil)
+    guard let back, write(back) else { return .ignored(resent) }
+    pause(policy.resendPause)
+    guard let stepped = read(), stepped.current != before.current else { return .ignored(resent) }
+    _ = write(before.current)
+    pause(policy.resendPause)
+    return .adjusted(read() ?? before)
+}
+
+func cString(_ buffer: [CChar]) -> String {
+    String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+}
+
 final class DDCClient: @unchecked Sendable {
     static let shared = DDCClient()
     private let queue = DispatchQueue(label: "com.berkinavci.MonitorBar.ddc", qos: .userInitiated)
@@ -79,9 +137,9 @@ final class DDCClient: @unchecked Sendable {
     }
 
     func write(display: DisplayIdentity, vcp: UInt8, raw: UInt16,
-               completion: @escaping @Sendable (HardwareLevels?) -> Void) {
+               completion: @escaping @Sendable (DDCWriteResult) -> Void) {
         queue.async {
-            let result = retrying(.write) { Self.writeOnce(display: display, vcp: vcp, raw: raw) }
+            let result = retrying(.write) { Self.writeOnce(display: display, vcp: vcp, raw: raw) } ?? .unreadable
             DispatchQueue.main.async { completion(result) }
         }
     }
@@ -102,12 +160,16 @@ final class DDCClient: @unchecked Sendable {
         }
     }
 
-    private static func writeOnce(display: DisplayIdentity, vcp: UInt8, raw: UInt16) -> HardwareLevels? {
+    // nil only when the monitor could not be read or written at all, so `retrying` tries the whole thing again.
+    private static func writeOnce(display: DisplayIdentity, vcp: UInt8, raw: UInt16) -> DDCWriteResult? {
         MBRescan()
         guard let index = matchDisplays([display], to: services())[display.id],
-              let before = read(vcp, index: index), raw <= before.maximum,
-              MBWriteVCP(index, vcp, raw) else { return nil }
-        return read(vcp, index: index)
+              let before = read(vcp, index: index), raw <= before.maximum else { return nil }
+        if before.current == raw { return .applied(before) }
+        guard MBWriteVCP(index, vcp, raw) else { return nil }
+        let result = settleWrite(requested: raw, before: before,
+                                 write: { MBWriteVCP(index, vcp, $0) }, read: { read(vcp, index: index) })
+        return result == .unreadable ? nil : result
     }
 
     private static func services() -> [DDCIdentity] {
@@ -118,7 +180,9 @@ final class DDCClient: @unchecked Sendable {
             var product: UInt32 = 0
             var serial: UInt32 = 0
             _ = MBServiceIdentity(index, &vendor, &product, &serial)
-            return DDCIdentity(index: index, vendor: vendor, product: product, serial: serial)
+            var path = [CChar](repeating: 0, count: 512)
+            let port = MBServicePath(index, &path, path.count) ? framebufferPort(fromServicePath: cString(path)) : nil
+            return DDCIdentity(index: index, vendor: vendor, product: product, serial: serial, port: port)
         }
     }
 

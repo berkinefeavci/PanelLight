@@ -222,7 +222,8 @@ struct HoverBrightnessView: View {
             // Only the bar; the full panel has the names, icons and percentages. VoiceOver still reads the name.
             ColorSlider(value: Binding(get: { target.value ?? 0 }, set: target.set), tint: barColor(target.tint),
                         enabled: target.enabled && target.value != nil,
-                        label: String(localized: "\(target.title) brightness"))
+                        label: String(localized: "\(target.title) brightness"),
+                        snaps: model.linkBrightness && model.canLinkBrightness ? model.linkSnapPoints : [])
                 .frame(width: HoverDrop.barWidth)
                 .padding(.top, HoverDrop.inset)
             .opacity(state.expanded ? 1 : 0)

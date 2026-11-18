@@ -76,7 +76,7 @@ struct QuickPanel: View {
                     sliderRow(title: String(localized: "All displays"), icon: "display.2",
                               value: { model.linkedBrightnessValue },
                               enabled: true,
-                              tint: barColor(externalBarColor)) { model.setAllBrightness($0) }
+                              tint: barColor(externalBarColor), snaps: model.linkSnapPoints) { model.setAllBrightness($0) }
                 } else {
                     if let builtInDisplay = model.builtInDisplay {
                         sliderRow(title: builtInDisplay.name, icon: "laptopcomputer",
@@ -186,7 +186,7 @@ struct QuickPanel: View {
     private func sliderRow(title: String, icon: String, badge: String? = nil,
                            low: String = "sun.min.fill", high: String = "sun.max.fill",
                            value: @escaping () -> Double?, isBrightness: Bool = true, enabled: Bool, tint: Color,
-                           set: @escaping (Double) -> Void) -> some View {
+                           snaps: [Double] = [], set: @escaping (Double) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
@@ -216,7 +216,7 @@ struct QuickPanel: View {
                     .frame(width: 16)
                 ColorSlider(value: Binding(get: { value() ?? 0 }, set: set), tint: tint,
                             enabled: enabled && value() != nil,
-                            label: isBrightness ? String(localized: "\(title) brightness") : title)
+                            label: isBrightness ? String(localized: "\(title) brightness") : title, snaps: snaps)
                     .frame(maxWidth: .infinity)
                 Image(systemName: high)
                     .font(.system(size: 13))
@@ -234,13 +234,26 @@ struct QuickPanel: View {
         guard let probe = model.probes.first(where: { $0.display.id == display.id }) else {
             return String(localized: "Checking the connection…")
         }
-        guard model.softwareDimmed.contains(display.id) else { return String(localized: "Hardware brightness over DDC/CI.") }
-        switch probe.issue {
-        case .noConnection:
-            return String(localized: "No DDC/CI connection found, dimmed in software. Use a USB-C or DisplayPort connection; some docks and adapters do not pass DDC/CI.")
-        case .noAnswer, nil:
-            return String(localized: "No DDC/CI response, dimmed in software. Check the monitor's DDC/CI setting and cable.")
+        var notes: [String] = []
+        if model.brightnessLocked.contains(display.id) {
+            notes.append(String(localized: "The monitor keeps its brightness fixed (HDR or picture mode), dimmed in software."))
+        } else if !model.softwareDimmed.contains(display.id) {
+            notes.append(String(localized: "Hardware brightness over DDC/CI."))
+        } else {
+            switch probe.issue {
+            case .noConnection:
+                notes.append(String(localized: "No DDC/CI connection found, dimmed in software. Use a USB-C or DisplayPort connection; some docks and adapters do not pass DDC/CI."))
+            case .noAnswer, nil:
+                notes.append(String(localized: "No DDC/CI response, dimmed in software. Check the monitor's DDC/CI setting and cable."))
+            }
         }
+        if model.contrastLocked.contains(display.id) {
+            notes.append(String(localized: "The monitor keeps its contrast fixed, adjusted in software."))
+        }
+        if model.brightnessLocked.contains(display.id) || model.contrastLocked.contains(display.id) {
+            notes.append(String(localized: "After changing the monitor's picture mode, press Refresh."))
+        }
+        return notes.joined(separator: " ")
     }
 
     private func icon(_ display: DisplayIdentity) -> String {
@@ -344,8 +357,18 @@ struct QuickPanel: View {
                     .foregroundStyle(.blue)
                 Divider().padding(.vertical, 3)
 
+                if model.nitDisplays.count >= 2 {
+                    sectionTitle("Matched brightness")
+                    NitSettingsView(model: model)
+                    Divider().padding(.vertical, 3)
+                }
+
                 sectionTitle("Screen corners")
                 ScreenCornersSettingsView()
+                Divider().padding(.vertical, 3)
+
+                sectionTitle("Full screen")
+                FullscreenStripSettingsView()
                 Divider().padding(.vertical, 3)
 
                 sectionTitle("Connection")
@@ -380,7 +403,7 @@ struct QuickPanel: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    Button("Refresh") { model.refresh() }
+                    Button("Refresh") { model.refresh(retryLockedControls: true) }
                         .modifier(PanelButtonStyle(glass: glassButtons))
                     Spacer()
                     Button("Quit") { NSApp.terminate(nil) }
@@ -472,6 +495,8 @@ struct ColorSlider: View {
     let tint: Color
     let enabled: Bool
     let label: String
+    /// Magnetic stops (0–100): a drag that comes near one sticks to it, and a tick marks it on the track.
+    var snaps: [Double] = []
     @State private var isHovered = false
     @State private var isDragging = false
     private let thumbWidth: CGFloat = 28
@@ -488,6 +513,19 @@ struct ColorSlider: View {
                     .overlay(alignment: .leading) {
                         Capsule().fill(tint).frame(width: trackWidth * progress, height: 5)
                     }
+                    // A stop shows as a small gap cut through the track.
+                    .mask(alignment: .leading) {
+                        ZStack(alignment: .leading) {
+                            Rectangle()
+                            ForEach(snaps, id: \.self) { snap in
+                                Rectangle()
+                                    .frame(width: 3)
+                                    .offset(x: trackWidth * min(1, max(0, snap / 100)) - 1.5)
+                                    .blendMode(.destinationOut)
+                            }
+                        }
+                        .compositingGroup()
+                    }
                     .offset(x: thumbWidth / 2)
                 sliderThumb
                     .offset(x: trackWidth * progress)
@@ -503,7 +541,10 @@ struct ColorSlider: View {
             .highPriorityGesture(DragGesture(minimumDistance: 0).onChanged { gesture in
                 guard enabled, trackWidth > 0 else { return }
                 isDragging = true
-                value = min(100, max(0, (gesture.location.x - thumbWidth / 2) / trackWidth * 100))
+                let raw = min(100, max(0, (gesture.location.x - thumbWidth / 2) / trackWidth * 100))
+                // Sticks within ~8 pt of a stop, so the stop is easy to hit and to leave on purpose.
+                let reach = 8 / trackWidth * 100
+                value = snaps.first { abs($0 - raw) <= reach } ?? raw
             }.onEnded { _ in isDragging = false })
             .animation(.easeInOut(duration: 0.15), value: isHovered)
             .animation(.easeInOut(duration: 0.15), value: isDragging)

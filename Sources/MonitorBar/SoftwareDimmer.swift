@@ -2,12 +2,13 @@ import AppKit
 
 // Sidecar and AirPlay screens have no DDC/CI, so their brightness is lowered with a click-through black overlay.
 @MainActor final class SoftwareDimmer {
-    private let maximumDim = 0.9
+    private let maximumDim: Double
     private var levels: [UInt32: Double] = [:]
     private var windows: [UInt32: NSWindow] = [:]
     private var screenObserver: NSObjectProtocol?
 
-    init() {
+    init(maximumDim: Double = 0.9) {
+        self.maximumDim = maximumDim
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in

@@ -12,8 +12,14 @@ bool MBParseReply(const uint8_t *reply, size_t count, uint8_t code, uint16_t *cu
 void MBRescan(void);
 int32_t MBServiceCount(void);
 bool MBServiceIdentity(int32_t index, uint32_t *vendor, uint32_t *product, uint32_t *serial);
+// IORegistry path of a DDC service, e.g. ".../dispext0:dcpav-service-epic:0/DCPAVServiceProxy".
+bool MBServicePath(int32_t index, char *buffer, size_t size);
 bool MBReadVCP(int32_t index, uint8_t code, uint16_t *current, uint16_t *maximum);
 bool MBWriteVCP(int32_t index, uint8_t code, uint16_t value);
+
+// CoreDisplay's IODisplayLocation for a display, e.g. ".../dispext0@B0000000/IOMobileFramebufferShim".
+// Together with MBServicePath it pairs a monitor with its DDC service even when two monitors share one EDID.
+bool MBDisplayLocation(uint32_t displayID, char *buffer, size_t size);
 
 bool MBReadBuiltInBrightness(uint32_t displayID, float *value);
 bool MBWriteBuiltInBrightness(uint32_t displayID, float value);

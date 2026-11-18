@@ -6,22 +6,25 @@ func adjustedContrastTable(_ values: [CGGammaValue], percent: Double) -> [CGGamm
     return values.map { min(1, max(0, ($0 - 0.5) * factor + 0.5)) }
 }
 
-final class BuiltInContrastController {
+// Contrast through the display's gamma table: the built-in display, and monitors that keep DDC/CI contrast fixed.
+final class GammaContrastController {
+    // The key name predates external displays; kept so a crash in an older build is still recovered.
     private static let modifiedKey = "builtInGammaModified"
 
-    // A crash skips restore(), leaving the contrast curve on the built-in display until the next launch.
+    // A crash skips restore, leaving the contrast curve on screen until the next launch.
     static func recoverAfterCrash() {
         guard UserDefaults.standard.bool(forKey: modifiedKey) else { return }
         CGDisplayRestoreColorSyncSettings()
         UserDefaults.standard.set(false, forKey: modifiedKey)
     }
 
-    private var displayID: CGDirectDisplayID?
-    private var original: ([CGGammaValue], [CGGammaValue], [CGGammaValue])?
+    private typealias Table = ([CGGammaValue], [CGGammaValue], [CGGammaValue])
+    private var originals: [CGDirectDisplayID: Table] = [:]
+
+    var adjustedDisplays: Set<CGDirectDisplayID> { Set(originals.keys) }
 
     func apply(_ percent: Double, to display: CGDirectDisplayID) -> Bool {
-        if displayID != display { restore() }
-        if original == nil {
+        if originals[display] == nil {
             let capacity = CGDisplayGammaTableCapacity(display)
             guard capacity > 0 else { return false }
             var red = [CGGammaValue](repeating: 0, count: Int(capacity))
@@ -30,11 +33,10 @@ final class BuiltInContrastController {
             var count: UInt32 = 0
             guard CGGetDisplayTransferByTable(display, capacity, &red, &green, &blue, &count) == .success,
                   count > 0 else { return false }
-            original = (Array(red.prefix(Int(count))), Array(green.prefix(Int(count))),
-                        Array(blue.prefix(Int(count))))
-            displayID = display
+            originals[display] = (Array(red.prefix(Int(count))), Array(green.prefix(Int(count))),
+                                  Array(blue.prefix(Int(count))))
         }
-        guard let original else { return false }
+        guard let original = originals[display] else { return false }
         let red = adjustedContrastTable(original.0, percent: percent)
         let green = adjustedContrastTable(original.1, percent: percent)
         let blue = adjustedContrastTable(original.2, percent: percent)
@@ -43,13 +45,15 @@ final class BuiltInContrastController {
         return true
     }
 
-    func restore() {
-        if let displayID, let original {
-            _ = CGSetDisplayTransferByTable(displayID, UInt32(original.0.count),
-                                            original.0, original.1, original.2)
+    func restore(_ display: CGDirectDisplayID) {
+        if let original = originals.removeValue(forKey: display) {
+            _ = CGSetDisplayTransferByTable(display, UInt32(original.0.count), original.0, original.1, original.2)
         }
-        displayID = nil
-        original = nil
+        if originals.isEmpty { UserDefaults.standard.set(false, forKey: Self.modifiedKey) }
+    }
+
+    func restoreAll() {
+        for display in adjustedDisplays { restore(display) }
         UserDefaults.standard.set(false, forKey: Self.modifiedKey)
     }
 }

@@ -17,6 +17,7 @@ private final class MonitorPanel: NSPanel {
     private var isOpen = false
     private var hoverDrop: HoverDrop?
     private var screenCorners: ScreenCorners?
+    private var fullscreenStrip: FullscreenStrip?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -54,6 +55,7 @@ private final class MonitorPanel: NSPanel {
         }
         model.start()
         screenCorners = ScreenCorners()
+        fullscreenStrip = FullscreenStrip()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

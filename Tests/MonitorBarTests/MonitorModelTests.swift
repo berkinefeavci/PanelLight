@@ -130,11 +130,6 @@ final class MonitorModelTests: XCTestCase {
         XCTAssertFalse(model.isPolling, "closed panel with Link off needs no timer")
     }
 
-    func testWriteRequiresMatchingReadback() {
-        XCTAssertEqual(writeOutcome(requested: 52, readback: HardwareLevels(current: 52, maximum: 100)), .verified)
-        XCTAssertEqual(writeOutcome(requested: 52, readback: HardwareLevels(current: 58, maximum: 100)), .mismatch)
-        XCTAssertEqual(writeOutcome(requested: 52, readback: nil), .unreadable)
-    }
 }
 
 @MainActor private enum TestRetainer {
