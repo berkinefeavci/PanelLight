@@ -15,6 +15,9 @@ private final class MonitorPanel: NSPanel {
     // Bumped on every open/close so a finished fade-out never hides a panel that was reopened meanwhile.
     private var transition = 0
     private var isOpen = false
+    private var hoverDrop: HoverDrop?
+    private var screenCorners: ScreenCorners?
+    private var fullscreenStrip: FullscreenStrip?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -23,6 +26,13 @@ private final class MonitorPanel: NSPanel {
             button.image?.isTemplate = true
             button.target = self
             button.action = #selector(togglePopover)
+            hoverDrop = HoverDrop(button: button, model: model)
+            hoverDrop?.suppressed = { [weak self] in self?.isOpen == true }
+            // The tab shows live readings like the panel; it does not take over polling while the panel is open.
+            hoverDrop?.onVisibility = { [weak self] visible in
+                guard let self, !self.isOpen else { return }
+                self.model.setPanelVisible(visible)
+            }
         }
         panel = MonitorPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 500),
                              styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -44,6 +54,8 @@ private final class MonitorPanel: NSPanel {
             self?.closePanelIfOutside(at: NSEvent.mouseLocation)
         }
         model.start()
+        screenCorners = ScreenCorners()
+        fullscreenStrip = FullscreenStrip()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -52,6 +64,7 @@ private final class MonitorPanel: NSPanel {
     }
 
     @objc private func togglePopover() {
+        hoverDrop?.hide(animated: false)
         if isOpen { closePanel() } else { openPanel() }
     }
 
@@ -60,6 +73,7 @@ private final class MonitorPanel: NSPanel {
         guard let button = statusItem.button else { return }
         isOpen = true
         transition += 1
+        model.setPanelVisible(true)
         model.refresh()
         panel.contentViewController?.view.layoutSubtreeIfNeeded()
         updatePanelSize(panel.contentViewController?.view.fittingSize ?? NSSize(width: 300, height: 500))
@@ -92,6 +106,7 @@ private final class MonitorPanel: NSPanel {
         guard isOpen else { return }
         isOpen = false
         transition += 1
+        model.setPanelVisible(false)
         let current = transition
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.12

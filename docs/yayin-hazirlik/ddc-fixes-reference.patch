@@ -1,0 +1,85 @@
+diff --git a/Sources/MonitorBar/DDCClient.swift b/Sources/MonitorBar/DDCClient.swift
+index 1136d0a..c3a6e41 100644
+--- a/Sources/MonitorBar/DDCClient.swift
++++ b/Sources/MonitorBar/DDCClient.swift
+@@ -17,0 +18,9 @@ struct DDCProbe: Sendable {
++// A monitor that is busy or waking often misses a DDC/CI transaction; try again before treating it as gone.
++func retrying<T>(attempts: Int, pause: TimeInterval, _ body: () -> T?) -> T? {
++    for attempt in 0..<attempts {
++        if let value = body() { return value }
++        if attempt < attempts - 1 { Thread.sleep(forTimeInterval: pause) }
++    }
++    return nil
++}
++
+@@ -32 +41 @@ final class DDCClient: @unchecked Sendable {
+-                let brightness = Self.read(0x10, index: index)
++                let brightness = retrying(attempts: 3, pause: 0.25) { Self.read(0x10, index: index) }
+@@ -46,6 +55,6 @@ final class DDCClient: @unchecked Sendable {
+-            MBRescan()
+-            let index = matchDisplays([display], to: Self.services())[display.id]
+-            var result: HardwareLevels?
+-            if let index, let before = Self.read(vcp, index: index), raw <= before.maximum,
+-               MBWriteVCP(index, vcp, raw) {
+-                result = Self.read(vcp, index: index)
++            let result: HardwareLevels? = retrying(attempts: 3, pause: 0.25) {
++                MBRescan()
++                guard let index = matchDisplays([display], to: Self.services())[display.id],
++                      let before = Self.read(vcp, index: index), raw <= before.maximum,
++                      MBWriteVCP(index, vcp, raw) else { return nil }
++                return Self.read(vcp, index: index)
+diff --git a/Sources/MonitorBar/MonitorModel.swift b/Sources/MonitorBar/MonitorModel.swift
+index cc7377b..a00ad12 100644
+--- a/Sources/MonitorBar/MonitorModel.swift
++++ b/Sources/MonitorBar/MonitorModel.swift
+@@ -36,0 +37 @@ import ServiceManagement
++    private var probeMisses: [UInt32: Int] = [:]
+@@ -109,0 +111 @@ import ServiceManagement
++    // Called when the panel opens: a message from an earlier session of use should not greet the user.
+@@ -110,0 +113 @@ import ServiceManagement
++        errorMessage = nil
+@@ -285,0 +289 @@ import ServiceManagement
++            probeMisses = [:]
+@@ -303,0 +308 @@ import ServiceManagement
++                        self.probeMisses[display.id] = 0
+@@ -312,0 +318,7 @@ import ServiceManagement
++                    let misses = (self.probeMisses[display.id] ?? 0) + 1
++                    self.probeMisses[display.id] = misses
++                    if let current = self.probes.first(where: { $0.display.id == display.id }),
++                       keepsLastKnown(hadHardware: current.brightness != nil && !self.softwareDimmed.contains(display.id),
++                                      consecutiveMisses: misses) {
++                        return current
++                    }
+diff --git a/Sources/MonitorBar/WriteScheduler.swift b/Sources/MonitorBar/WriteScheduler.swift
+index 165ba7e..0b45c6d 100644
+--- a/Sources/MonitorBar/WriteScheduler.swift
++++ b/Sources/MonitorBar/WriteScheduler.swift
+@@ -50,0 +51,5 @@ func writeOutcome(requested: UInt16, readback: HardwareLevels?) -> WriteOutcome
++
++// One missed probe (monitor asleep or busy) keeps the row that worked; a second in a row means it is really gone.
++func keepsLastKnown(hadHardware: Bool, consecutiveMisses: Int) -> Bool {
++    hadHardware && consecutiveMisses < 2
++}
+diff --git a/Tests/MonitorBarTests/MonitorModelTests.swift b/Tests/MonitorBarTests/MonitorModelTests.swift
+index ab7aa27..79dbdf7 100644
+--- a/Tests/MonitorBarTests/MonitorModelTests.swift
++++ b/Tests/MonitorBarTests/MonitorModelTests.swift
+@@ -56,0 +57,18 @@ final class MonitorModelTests: XCTestCase {
++
++    func testBusyMonitorIsRetriedBeforeGivingUp() {
++        var calls = 0
++        let recovered: Int? = retrying(attempts: 3, pause: 0) { calls += 1; return calls == 3 ? 7 : nil }
++        XCTAssertEqual(recovered, 7)
++        XCTAssertEqual(calls, 3)
++
++        calls = 0
++        let dead: Int? = retrying(attempts: 3, pause: 0) { calls += 1; return nil }
++        XCTAssertNil(dead)
++        XCTAssertEqual(calls, 3)
++    }
++
++    func testOneMissedProbeKeepsHardwareControlButTheSecondFallsBack() {
++        XCTAssertTrue(keepsLastKnown(hadHardware: true, consecutiveMisses: 1))
++        XCTAssertFalse(keepsLastKnown(hadHardware: true, consecutiveMisses: 2))
++        XCTAssertFalse(keepsLastKnown(hadHardware: false, consecutiveMisses: 1))
++    }

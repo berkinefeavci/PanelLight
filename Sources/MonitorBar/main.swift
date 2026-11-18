@@ -12,9 +12,6 @@ if CommandLine.arguments.contains("--probe") {
     var keyboardLevel: Float = 0
     let keyboardValue = MBReadKeyboardBrightness(&keyboardLevel) ? "\(Int((keyboardLevel * 100).rounded()))%" : "unavailable"
     print("Keyboard backlight: \(keyboardValue)")
-    var keyboardAuto = false
-    let keyboardAutoValue = MBReadKeyboardAutoBrightness(&keyboardAuto) ? (keyboardAuto ? "on" : "off") : "unavailable"
-    print("Keyboard auto brightness: \(keyboardAutoValue)")
     if let builtIn = DisplayDiscovery.builtInDisplay() {
         var level: Float = 0
         let value = MBReadBuiltInBrightness(builtIn.id, &level) ? "\(Int((level * 100).rounded()))%" : "unavailable"
@@ -26,7 +23,7 @@ if CommandLine.arguments.contains("--probe") {
         for probe in results {
             let level = probe.brightness.map { "\($0.current)/\($0.maximum)" } ?? "unavailable"
             print("\(probe.display.name) [\(probe.display.id)]: brightness \(level)")
-            if let issue = probe.issue { print("  \(issue)") }
+            if let issue = probe.issue { print("  \(issue.summary)") }
         }
         exit(0)
     }
@@ -39,6 +36,7 @@ if CommandLine.arguments.contains("--probe") {
     }
     let model = MonitorModel()
     model.start()
+    model.setPanelVisible(true)
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 430),
                           styleMask: [.titled, .closable], backing: .buffered, defer: false)
     window.title = "PanelLight Preview"

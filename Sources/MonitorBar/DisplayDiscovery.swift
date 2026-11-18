@@ -1,9 +1,15 @@
 import AppKit
 import CoreGraphics
+import DDCBridge
 
 final class DisplayDiscovery: @unchecked Sendable {
     var onChange: (([DisplayIdentity], Bool) -> Void)?
     private var wakeObserver: NSObjectProtocol?
+    // Monitors need a moment after a wake before they answer DDC/CI; probing at once makes them look dead.
+    private let wakeSettleDelay: TimeInterval
+    private var wakeGeneration = 0
+
+    init(wakeSettleDelay: TimeInterval = 2) { self.wakeSettleDelay = wakeSettleDelay }
 
     func start() {
         CGDisplayRegisterReconfigurationCallback(Self.displayChanged, Unmanaged.passUnretained(self).toOpaque())
@@ -11,11 +17,21 @@ final class DisplayDiscovery: @unchecked Sendable {
             forName: NSWorkspace.didWakeNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in self?.publish(force: true) }
+        ) { [weak self] _ in self?.refreshAfterWake() }
         publish()
     }
 
+    private func refreshAfterWake() {
+        wakeGeneration += 1
+        let current = wakeGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + wakeSettleDelay) { [weak self] in
+            guard let self, self.wakeGeneration == current else { return }
+            self.publish(force: true)
+        }
+    }
+
     func stop() {
+        wakeGeneration += 1
         CGDisplayRemoveReconfigurationCallback(Self.displayChanged, Unmanaged.passUnretained(self).toOpaque())
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
@@ -63,7 +79,14 @@ final class DisplayDiscovery: @unchecked Sendable {
                                    vendor: vendor,
                                    product: CGDisplayModelNumber(id),
                                    serial: CGDisplaySerialNumber(id),
-                                   isVirtual: isVirtualDisplay(vendor: vendor, name: name))
+                                   isVirtual: isVirtualDisplay(vendor: vendor, name: name),
+                                   port: port(of: id))
         }
+    }
+
+    static func port(of id: CGDirectDisplayID) -> String? {
+        var buffer = [CChar](repeating: 0, count: 512)
+        guard MBDisplayLocation(id, &buffer, buffer.count) else { return nil }
+        return framebufferPort(fromDisplayLocation: cString(buffer))
     }
 }

@@ -40,13 +40,14 @@ static bool MBLoadDisplayServices(void) {
 bool MBReadBuiltInBrightness(uint32_t displayID, float *value) {
     if (!value || !MBLoadDisplayServices()) return false;
     float level = -1;
-    if (displayBrightnessGet(displayID, &level) != 0 || level < 0 || level > 1) return false;
+    if (displayBrightnessGet(displayID, &level) != 0 || !isfinite(level) || level < 0 || level > 1) return false;
     *value = level;
     return true;
 }
 
 bool MBWriteBuiltInBrightness(uint32_t displayID, float value) {
-    if (!MBLoadDisplayServices() || value < 0 || value > 1 || displayBrightnessSet(displayID, value) != 0) return false;
+    if (!MBLoadDisplayServices() || !isfinite(value) || value < 0 || value > 1 ||
+        displayBrightnessSet(displayID, value) != 0) return false;
     if (displayBrightnessChanged) displayBrightnessChanged(displayID, value);
     return true;
 }
@@ -64,18 +65,27 @@ static id MBKeyboardClient(void) {
     return client;
 }
 
+// Private frameworks can change what they return; a wrong class would crash on the first unknown selector.
+static bool MBIsKindOf(id object, const char *className) {
+    Class cls = objc_getClass(className);
+    return object && cls && ((BOOL (*)(id, SEL, Class))objc_msgSend)(object, sel_registerName("isKindOfClass:"), cls);
+}
+
 static bool MBKeyboardID(uint64_t *keyboardID) {
     id client = MBKeyboardClient();
-    if (!client || !class_getInstanceMethod(object_getClass(client), sel_registerName("copyKeyboardBacklightIDs"))) return false;
+    if (!keyboardID || !client || !class_getInstanceMethod(object_getClass(client), sel_registerName("copyKeyboardBacklightIDs"))) return false;
     id ids = ((id (*)(id, SEL))objc_msgSend)(client, sel_registerName("copyKeyboardBacklightIDs"));
     if (!ids) return false;
-    uint64_t count = ((uint64_t (*)(id, SEL))objc_msgSend)(ids, sel_registerName("count"));
-    if (count) {
+    bool found = false;
+    if (MBIsKindOf(ids, "NSArray") && ((uint64_t (*)(id, SEL))objc_msgSend)(ids, sel_registerName("count")) > 0) {
         id number = ((id (*)(id, SEL, uint64_t))objc_msgSend)(ids, sel_registerName("objectAtIndex:"), 0);
-        *keyboardID = ((uint64_t (*)(id, SEL))objc_msgSend)(number, sel_registerName("unsignedLongLongValue"));
+        if (MBIsKindOf(number, "NSNumber")) {
+            *keyboardID = ((uint64_t (*)(id, SEL))objc_msgSend)(number, sel_registerName("unsignedLongLongValue"));
+            found = true;
+        }
     }
     ((void (*)(id, SEL))objc_msgSend)(ids, sel_registerName("release"));
-    return count > 0;
+    return found;
 }
 
 bool MBReadKeyboardBrightness(float *value) {
@@ -98,27 +108,6 @@ bool MBWriteKeyboardBrightness(float value) {
     return true;
 }
 
-bool MBReadKeyboardAutoBrightness(bool *enabled) {
-    uint64_t keyboardID;
-    id client = MBKeyboardClient();
-    if (!enabled || !MBKeyboardID(&keyboardID) ||
-        !class_getInstanceMethod(object_getClass(client), sel_registerName("isAutoBrightnessEnabledForKeyboard:"))) return false;
-    *enabled = ((bool (*)(id, SEL, uint64_t))objc_msgSend)(client,
-        sel_registerName("isAutoBrightnessEnabledForKeyboard:"), keyboardID);
-    return true;
-}
-
-bool MBSetKeyboardAutoBrightness(bool enabled) {
-    uint64_t keyboardID;
-    id client = MBKeyboardClient();
-    if (!MBKeyboardID(&keyboardID) ||
-        !class_getInstanceMethod(object_getClass(client), sel_registerName("enableAutoBrightness:forKeyboard:"))) return false;
-    ((void (*)(id, SEL, bool, uint64_t))objc_msgSend)(client,
-        sel_registerName("enableAutoBrightness:forKeyboard:"), enabled, keyboardID);
-    bool readback = !enabled;
-    return MBReadKeyboardAutoBrightness(&readback) && readback == enabled;
-}
-
 static id MBNightShiftClient(void) {
     static id client;
     static dispatch_once_t once;
@@ -137,7 +126,7 @@ bool MBReadNightShift(bool *active, bool *enabled, int32_t *mode) {
     SEL selector = sel_registerName("getBlueLightStatus:");
     if (!active || !enabled || !mode || !client ||
         !class_getInstanceMethod(object_getClass(client), selector)) return false;
-    uint8_t status[64] = {0};
+    uint8_t status[256] = {0};   // the private status struct is ~50 bytes; the spare room guards against it growing
     if (!((BOOL (*)(id, SEL, void *))objc_msgSend)(client, selector, status)) return false;
     int32_t rawMode;
     memcpy(&rawMode, status + 4, sizeof(rawMode));
@@ -171,6 +160,7 @@ typedef struct {
     uint32_t product;
     uint32_t serial;
     bool hasEDID;
+    io_string_t path;
 } MBEntry;
 
 static MBEntry entries[8];
@@ -254,6 +244,7 @@ void MBRescan(void) {
             if (service) {
                 MBEntry *entry = &entries[entryCount++];
                 entry->service = service;
+                if (IORegistryEntryGetPath(node, kIOServicePlane, entry->path) != KERN_SUCCESS) entry->path[0] = 0;
                 CFDataRef edid = NULL;
                 if (copyEDID && copyEDID(service, &edid) == KERN_SUCCESS && edid) {
                     if (CFDataGetLength(edid) >= 16) {
@@ -289,6 +280,39 @@ bool MBServiceIdentity(int32_t index, uint32_t *vendor, uint32_t *product, uint3
     if (product) *product = entries[index].product;
     if (serial) *serial = entries[index].serial;
     return true;
+}
+
+static bool MBCopyCString(const char *text, char *buffer, size_t size) {
+    if (!text || !buffer || size == 0 || text[0] == 0 || strlen(text) >= size) return false;
+    memcpy(buffer, text, strlen(text) + 1);
+    return true;
+}
+
+bool MBServicePath(int32_t index, char *buffer, size_t size) {
+    if (!MBValidIndex(index)) return false;
+    return MBCopyCString(entries[index].path, buffer, size);
+}
+
+typedef CFDictionaryRef (*MBDisplayInfo)(uint32_t);
+
+bool MBDisplayLocation(uint32_t displayID, char *buffer, size_t size) {
+    static MBDisplayInfo displayInfo;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *library = dlopen("/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay", RTLD_NOW);
+        if (library) displayInfo = (MBDisplayInfo)dlsym(library, "CoreDisplay_DisplayCreateInfoDictionary");
+    });
+    if (!displayInfo || !buffer || size == 0) return false;
+    CFDictionaryRef info = displayInfo(displayID);
+    if (!info) return false;
+    bool found = false;
+    if (CFGetTypeID(info) == CFDictionaryGetTypeID()) {
+        CFTypeRef location = CFDictionaryGetValue(info, CFSTR("IODisplayLocation"));
+        found = location && CFGetTypeID(location) == CFStringGetTypeID() &&
+                CFStringGetCString((CFStringRef)location, buffer, (CFIndex)size, kCFStringEncodingUTF8);
+    }
+    CFRelease(info);
+    return found;
 }
 
 bool MBReadVCP(int32_t index, uint8_t code, uint16_t *current, uint16_t *maximum) {
